@@ -55,6 +55,14 @@ public interface MovieProviders extends ProviderRegistration {
         return getProvider(DetectiveConan.class, DetectiveConan::new);
     }
 
+    default DoctorWho doctorWho() {
+        return getProvider(DoctorWho.class, DoctorWho::new);
+    }
+
+    default Doraemon doraemon() {
+        return getProvider(Doraemon.class, Doraemon::new);
+    }
+
     default DragonBall dragonBall() {
         return getProvider(DragonBall.class, DragonBall::new);
     }
@@ -119,13 +127,17 @@ public interface MovieProviders extends ProviderRegistration {
     default LordOfTheRings lordOfTheRings() {
         return getProvider(LordOfTheRings.class, LordOfTheRings::new);
     }
-    
+
     default MoneyHeist moneyHeist() {
         return getProvider(MoneyHeist.class, MoneyHeist::new);
     }
 
     default Movie movie() {
         return getProvider(Movie.class, Movie::new);
+    }
+
+    default OnePiece onePiece() {
+        return getProvider(OnePiece.class, OnePiece::new);
     }
 
     default OscarMovie oscarMovie() {
@@ -162,6 +174,10 @@ public interface MovieProviders extends ProviderRegistration {
 
     default StarWars starWars() {
         return getProvider(StarWars.class, StarWars::new);
+    }
+
+    default StudioGhibli studioGhibli() {
+        return getProvider(StudioGhibli.class, StudioGhibli::new);
     }
 
     default TheItCrowd theItCrowd() {

@@ -58,6 +58,24 @@ class FakeValuesTest {
     }
 
     @Test
+    void correctPathForHebrewLanguage() {
+        FakeValues hebrew = new FakeValues(new Locale("iw"));
+        assertThat(hebrew.getPath()).isEqualTo("he");
+    }
+
+    @Test
+    void incorrectPathForHebrewLanguage() {
+        FakeValues hebrew = new FakeValues(new Locale("iw"));
+        assertThat(hebrew.getPath()).isNotEqualTo("iw");
+    }
+
+    @Test
+    void correctLocale() {
+        FakeValues fv = new FakeValues(new Locale("uk"));
+        assertThat(fv.getLocale()).isEqualTo(new Locale("uk"));
+    }
+
+    @Test
     void getAValueFromALocaleThatCantBeLoaded() {
         FakeValues fakeValues = new FakeValues(new Locale("nothing"));
         assertThat(fakeValues.get(PATH)).isNull();

@@ -7,10 +7,11 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.RepeatedTest;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mock;
 import org.mockito.Mockito;
-import org.mockito.MockitoAnnotations;
 import org.mockito.Spy;
 
 import java.io.IOException;
@@ -19,10 +20,8 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
-import java.util.Arrays;
-import java.util.Date;
-import java.util.List;
-import java.util.Locale;
+import java.util.*;
+import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -50,18 +49,14 @@ class FakeValuesServiceTest extends AbstractFakerTest {
     @BeforeEach
     protected void before() {
         super.before();
-        try (AutoCloseable ignored = MockitoAnnotations.openMocks(this)) {
 
-            // always return the first element
-            when(randomService.nextInt(anyInt())).thenReturn(0);
-            context = new FakerContext(new Locale("test"), randomService);
-            when(mockedFaker.getContext()).thenReturn(context);
+        // always return the first element
+        when(randomService.nextInt(anyInt())).thenReturn(0);
+        context = new FakerContext(new Locale("test"), randomService);
+        when(mockedFaker.getContext()).thenReturn(context);
 
-            fakeValuesService = Mockito.spy(new FakeValuesService());
-            fakeValuesService.updateFakeValuesInterfaceMap(context.getLocaleChain());
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        }
+        fakeValuesService = Mockito.spy(new FakeValuesService());
+        fakeValuesService.updateFakeValuesInterfaceMap(context.getLocaleChain());
     }
 
     @Test
@@ -239,6 +234,38 @@ class FakeValuesServiceTest extends AbstractFakerTest {
         final List<Locale> chain = FVS.getLocaleChain();
 
         assertThat(chain).isEqualTo(processedChain);
+    }
+
+    @Test
+    void testFakerContextSetLocale() {
+        final FakerContext fakerContext = new FakerContext(new Locale("en"), randomService);
+        fakerContext.setLocale(new Locale("uk"));
+        assertThat(fakerContext.getLocale()).isEqualTo(new Locale("uk"));
+    }
+
+    @Test
+    void testFakerContextSetRandomService() {
+        final FakerContext fakerContext = new FakerContext(Locale.US, randomService);
+        fakerContext.setRandomService(new RandomService());
+        assertThat(fakerContext.getRandomService()).usingRecursiveComparison().isEqualTo(new RandomService());
+    }
+
+    @ParameterizedTest
+    @MethodSource("fakerContexts")
+    void checkFakerContextEquality(FakerContext fc1, FakerContext fc2, boolean equals) {
+        if (equals) {
+            assertThat(fc1).usingRecursiveComparison().isEqualTo(fc2);
+        } else {
+            assertThat(fc1).usingRecursiveComparison().isNotEqualTo(fc2);
+        }
+    }
+
+    static Stream<Arguments> fakerContexts() {
+        return Stream.of(
+            Arguments.of(new FakerContext(new Locale("en"), new RandomService()), new FakerContext(new Locale("uk"), new RandomService()), false),
+            Arguments.of(new FakerContext(new Locale("en"), new RandomService()), null, false),
+            Arguments.of(new FakerContext(Locale.US, new RandomService()), new FakerContext(Locale.US, new RandomService()), true)
+        );
     }
 
     @Test

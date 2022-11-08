@@ -6,7 +6,9 @@ import java.util.Map;
 
 /**
  * @since 1.6.0
+ * @deprecated Replaced by Text
  */
+@Deprecated
 public class Password extends AbstractProvider<BaseProviders> {
 
     public static final String EN_LOWERCASE = "abcdefghijklmnopqrstuvwxyz";

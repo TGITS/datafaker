@@ -47,6 +47,10 @@ public interface BaseProviders extends ProviderRegistration {
         return getProvider(Aws.class, Aws::new);
     }
 
+    default Azure azure() {
+        return getProvider(Azure.class, Azure::new);
+    }
+
     default Barcode barcode() {
         return getProvider(Barcode.class, Barcode::new);
     }
@@ -111,6 +115,10 @@ public interface BaseProviders extends ProviderRegistration {
         return getProvider(Company.class, Company::new);
     }
 
+    default Compass compass() {
+        return getProvider(Compass.class, Compass::new);
+    }
+
     default Computer computer() {
         return getProvider(Computer.class, Computer::new);
     }
@@ -119,8 +127,8 @@ public interface BaseProviders extends ProviderRegistration {
         return getProvider(Construction.class, Construction::new);
     }
 
-    default Money money() {
-        return getProvider(Money.class, Money::new);
+    default Cosmere cosmere() {
+        return getProvider(Cosmere.class, Cosmere::new);
     }
 
     default Country country() {
@@ -131,16 +139,16 @@ public interface BaseProviders extends ProviderRegistration {
         return getProvider(CPF.class, CPF::new);
     }
 
-    default Hashing hashing() {
-        return getProvider(Hashing.class, Hashing::new);
-    }
-
     default CryptoCoin cryptoCoin() {
         return getProvider(CryptoCoin.class, CryptoCoin::new);
     }
 
     default Currency currency() {
         return getProvider(Currency.class, Currency::new);
+    }
+
+    default CultureSeries cultureSeries() {
+        return getProvider(CultureSeries.class, CultureSeries::new);
     }
 
     default DarkSoul darkSoul() {
@@ -173,6 +181,10 @@ public interface BaseProviders extends ProviderRegistration {
 
     default Domain domain() {
         return getProvider(Domain.class, Domain::new);
+    }
+
+    default Drone drone() {
+        return getProvider(Drone.class, Drone::new);
     }
 
     default DrivingLicense drivingLicense() {
@@ -211,6 +223,10 @@ public interface BaseProviders extends ProviderRegistration {
         return getProvider(Finance.class, Finance::new);
     }
 
+    default FreshPrinceOfBelAir freshPrinceOfBelAir() {
+        return getProvider(FreshPrinceOfBelAir.class, FreshPrinceOfBelAir::new);
+    }
+
     default FunnyName funnyName() {
         return getProvider(FunnyName.class, FunnyName::new);
     }
@@ -233,6 +249,10 @@ public interface BaseProviders extends ProviderRegistration {
 
     default Hacker hacker() {
         return getProvider(Hacker.class, Hacker::new);
+    }
+
+    default Hashing hashing() {
+        return getProvider(Hashing.class, Hashing::new);
     }
 
     default Hipster hipster() {
@@ -315,6 +335,10 @@ public interface BaseProviders extends ProviderRegistration {
         return getProvider(Minecraft.class, Minecraft::new);
     }
 
+    default Money money() {
+        return getProvider(Money.class, Money::new);
+    }
+
     default Mood mood() {
         return getProvider(Mood.class, Mood::new);
     }
@@ -355,8 +379,13 @@ public interface BaseProviders extends ProviderRegistration {
         return getProvider(Passport.class, Passport::new);
     }
 
+    @Deprecated
     default Password password() {
         return getProvider(Password.class, Password::new);
+    }
+
+    default Text text() {
+        return getProvider(Text.class, Text::new);
     }
 
     default PhoneNumber phoneNumber() {

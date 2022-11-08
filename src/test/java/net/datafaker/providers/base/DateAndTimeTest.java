@@ -90,8 +90,17 @@ class DateAndTimeTest extends BaseFakerTest<BaseFaker> {
     }
 
     @Test
+    void testBetweenWithMaskReturningString() {
+        Timestamp now = new Timestamp(System.currentTimeMillis());
+        Timestamp then = new Timestamp(System.currentTimeMillis() + 1000);
+        String pattern = "YYYY MM.dd mm:hh:ss";
+
+        DateTimeFormatter.ofPattern(pattern).parse(faker.date().between(now, then, pattern));
+    }
+
+    @Test
     void testBetweenDateAsArgument() {
-         faker.date().between(new Date(), new Date());
+        faker.date().between(new Date(), new Date());
     }
 
     @Test
@@ -157,6 +166,17 @@ class DateAndTimeTest extends BaseFakerTest<BaseFaker> {
         DateTimeFormatter.ofPattern(pattern).parse(faker.date().past(1, TimeUnit.DAYS, pattern));
         DateTimeFormatter.ofPattern(pattern).parse(faker.date().past(20, 1, TimeUnit.DAYS, pattern));
         DateTimeFormatter.ofPattern(pattern).parse(faker.date().past(1, TimeUnit.DAYS, new Date(), pattern));
+    }
+
+    @Test
+    void periodTest() {
+        Period maxPeriod = Period.of(3, 2, 1);
+        Period minPeriod = Period.of(2, 1, 0);
+        Period period = faker.date().period(minPeriod, maxPeriod);
+
+        assertThat((period.getYears() * 12 + period.getMonths()) * 30 + period.getDays())
+            .isBetween((minPeriod.getYears() * 12 + minPeriod.getMonths()) * 30 + minPeriod.getDays(),
+                (maxPeriod.getYears() * 12 + maxPeriod.getMonths()) * 30 + maxPeriod.getDays());
     }
 
     @ParameterizedTest

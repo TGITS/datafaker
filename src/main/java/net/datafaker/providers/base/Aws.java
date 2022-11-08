@@ -1,13 +1,18 @@
 package net.datafaker.providers.base;
 
+import static net.datafaker.providers.base.Text.EN_UPPERCASE;
 
 /**
  * @since 1.3.0
  */
 public class Aws extends AbstractProvider<BaseProviders> {
 
+    private final Text.TextRuleConfig configForRoute53ZoneId;
+
     protected Aws(BaseProviders faker) {
         super(faker);
+        configForRoute53ZoneId = Text.TextSymbolsBuilder.builder()
+                                 .with(EN_UPPERCASE).len(21).build();
     }
 
     public String region() {
@@ -50,7 +55,7 @@ public class Aws extends AbstractProvider<BaseProviders> {
     }
 
     public String route53ZoneId() {
-        return faker.regexify("[A-Z]{21}");
+        return faker.text().text(configForRoute53ZoneId);
     }
 
     public String securityGroupId() {
@@ -70,6 +75,6 @@ public class Aws extends AbstractProvider<BaseProviders> {
     }
 
     private String randHex() {
-        return faker.regexify("[a-f0-9]{16}");
+        return faker.random().hex(16, false);
     }
 }

@@ -136,6 +136,7 @@ Stream<String> names = faker.stream(
 There are 2 ways of data generation in specific formats
 1. Generate it from scratch
 2. There is already a sequence of objects and we could extract from them some values and return it in specific format
+
 For both cases we need a `Schema` which could describe fields and a way of data generation.
 In case of generation from scratch `Suppliers` are enough, in case of transformation `Functions` are required
 #### CSV
@@ -255,6 +256,7 @@ Providers
 * Avatar
 * Aviation
 * AWS
+* Azure
 * Babylon 5
 * Back To The Future
 * Barcode
@@ -277,12 +279,14 @@ Providers
 * Cat
 * Chuck Norris
 * Clash of Clans
+* Control
 * Code
 * Coin
 * Color
 * Commerce
 * Community
 * Company
+* Compass
 * Computer
 * Country
 * Credit Card Type
@@ -295,7 +299,9 @@ Providers
 * Dessert
 * Device
 * Disease
+* Doctor Who
 * Dog
+* Doraemon
 * DC Comics
 * Domain
 * Dragon Ball
@@ -370,6 +376,7 @@ Providers
 * Nato Phonetic Alphabet
 * Nigeria
 * Number
+* One Piece
 * Options
 * Oscar Movie
 * Overwatch
@@ -398,6 +405,7 @@ Providers
 * Space
 * StarCraft
 * StarTrek
+* Studio Ghibli
 * Stock
 * Subscription
 * Superhero

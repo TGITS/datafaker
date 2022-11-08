@@ -67,12 +67,29 @@ public class TimeTest extends BaseFakerTest<BaseFaker> {
     }
 
     @Test
+    void testBetweenWithSameLocalTime() {
+        LocalTime now = LocalTime.now();
+
+        long time = faker.time().between(now, now);
+        assertThat(LocalTime.ofNanoOfDay(time)).isEqualTo(now);
+    }
+
+    @Test
     void testBetweenThenLargerThanNow() {
         LocalTime now = LocalTime.now();
         LocalTime then = now.plus(1, ChronoUnit.SECONDS);
         assertThatThrownBy(() -> faker.time().between(then, now))
             .isInstanceOf(IllegalArgumentException.class)
             .hasMessage("Invalid time range, the upper bound time is before the lower bound.");
+    }
+
+    @Test
+    void testBetweenWithMask() {
+        String pattern = "mm:hh:ss";
+        LocalTime now = LocalTime.now();
+        LocalTime then = now.plus(1, ChronoUnit.MINUTES);
+
+        DateTimeFormatter.ofPattern(pattern).parse(faker.time().between(now, then, pattern));
     }
 
     @Test
