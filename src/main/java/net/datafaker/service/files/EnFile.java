@@ -43,6 +43,7 @@ public class EnFile {
         "babylon5.yml",
         "back_to_the_future.yml",
         "barcode.yml",
+        "baseball.yml",
         "basketball.yml",
         "battlefield1.yml",
         "beer.yml",
@@ -99,6 +100,7 @@ public class EnFile {
         "elden_ring.yml",
         "elder_scrolls.yml",
         "electrical_components.yml",
+        "emoji.yml",
         "esport.yml",
         "englandfootball.yml",
 //            "fallout.yml",
@@ -253,7 +255,8 @@ public class EnFile {
         new EnFile("elder_scrolls.yml", "games"),
         new EnFile("phone_number.yml", "cell_phone"), // load phone number again with a different path
         new EnFile("resident_evil.yml", "games"),
-        new EnFile("hearthstone.yml", "games"));
+        new EnFile("hearthstone.yml", "games"),
+        new EnFile("marvel_snap.yml", "games"));
 
     private static final List<EnFile> ALL_FILES;
 
