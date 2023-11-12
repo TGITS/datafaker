@@ -1,13 +1,37 @@
 package net.datafaker.providers.base;
 
+import net.datafaker.annotations.Deterministic;
+
 import java.math.BigInteger;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Set;
 import java.util.regex.Pattern;
 
 /**
  * @since 0.8.0
  */
 public class Finance extends AbstractProvider<BaseProviders> {
+
+    public static final BigInteger A_CODE = BigInteger.valueOf(97L);
+
+    public enum CreditCardType {
+        VISA,
+        MASTERCARD,
+        DISCOVER,
+        AMERICAN_EXPRESS,
+        DINERS_CLUB,
+        JCB,
+        SWITCH,
+        SOLO,
+        DANKORT,
+        FORBRUGSFORENINGEN,
+        LASER
+    }
+
     private static final Pattern NUMBERS = Pattern.compile("[^0-9]");
     private static final Pattern EMPTY_STRING = Pattern.compile("");
 
@@ -30,27 +54,44 @@ public class Finance extends AbstractProvider<BaseProviders> {
     private static final Map<String, String> countryCodeToBasicBankAccountNumberPattern =
         createCountryCodeToBasicBankAccountNumberPatternMap();
 
+    /** Get the set of country codes supported for IBAN generation */
+    @Deterministic
+    public static Set<String> ibanSupportedCountries() {
+        return countryCodeToBasicBankAccountNumberPattern.keySet();
+    }
+
     public String creditCard(CreditCardType creditCardType) {
-        final String key = String.format("finance.credit_card.%s", creditCardType.toString().toLowerCase(Locale.ROOT));
+        final String key = "finance.credit_card." + creditCardType.toString().toLowerCase(Locale.ROOT);
         String value = resolve(key);
         final String template = faker.numerify(value);
 
-        String[] split = EMPTY_STRING.split(NUMBERS.matcher(template).replaceAll(""));
-        List<Integer> reversedAsInt = new ArrayList<>();
-        for (int i = 0; i < split.length; i++) {
-            final String current = split[split.length - 1 - i];
-            if (!current.isEmpty()) {
-                reversedAsInt.add(Integer.valueOf(current));
-            }
-        }
+        int[] digits = template.chars().filter(Character::isDigit).boxed().mapToInt(t -> t - '0').toArray();
         int luhnSum = 0;
         int multiplier = 1;
-        for (Integer digit : reversedAsInt) {
+        for (int i = digits.length - 1; i >= 0; i--) {
             multiplier = (multiplier == 2 ? 1 : 2);
-            luhnSum += sum(EMPTY_STRING.split(String.valueOf(digit * multiplier)));
+            luhnSum += sumOfDigits(digits[i] * multiplier);
         }
         int luhnDigit = (10 - (luhnSum % 10)) % 10;
-        return template.replace('\\', ' ').replace('/', ' ').trim().replace('L', String.valueOf(luhnDigit).charAt(0));
+        StringBuilder res = new StringBuilder(template.length());
+        for (int i = 0; i < template.length(); i++) {
+            final char c = template.charAt(i);
+            switch (c) {
+                case '/', '\\' -> {if (!res.isEmpty() && i != template.length() - 1) {res.append(' ');}}
+                case 'L' -> res.append(luhnDigit);
+                default -> res.append(c);
+            }
+        }
+        return res.toString().trim();
+    }
+
+    private int sumOfDigits(int value) {
+        int res = 0;
+        while (value > 0) {
+            res += value % 10;
+            value /= 10;
+        }
+        return res;
     }
 
     public String creditCard() {
@@ -77,6 +118,26 @@ public class Finance extends AbstractProvider<BaseProviders> {
         return countryCode + checkSum + basicBankAccountNumber;
     }
 
+    public String usRoutingNumber() {
+        final int random = faker.random().nextInt(12) + 1;
+        final String base =
+            // 01 through 12 are the "normal" routing numbers, and correspond to the 12 Federal Reserve Banks.
+            (random < 10 ? "0" : "") + random
+            + faker.numerify("#".repeat(6));
+        int check =
+           Character.getNumericValue(base.charAt(0)) * 3
+            + Character.getNumericValue(base.charAt(1)) * 7
+            + Character.getNumericValue(base.charAt(2))
+            + Character.getNumericValue(base.charAt(3)) * 3
+            + Character.getNumericValue(base.charAt(4)) * 7
+            + Character.getNumericValue(base.charAt(5))
+            + Character.getNumericValue(base.charAt(6)) * 3
+            + Character.getNumericValue(base.charAt(7)) * 7;
+        check = Math.abs(check % 10 - 10) % 10;
+
+        return base + check;
+    }
+
     private CreditCardType randomCreditCardType() {
         return CreditCardType.values()[this.faker.random().nextInt(CreditCardType.values().length)];
     }
@@ -92,11 +153,11 @@ public class Finance extends AbstractProvider<BaseProviders> {
     }
 
     private static String calculateIbanChecksum(String countryCode, String basicBankAccountNumber) {
-        String basis = basicBankAccountNumber + countryCode + "00";
+        String basis = (basicBankAccountNumber + countryCode).toLowerCase(Locale.ROOT) + "00";
 
-        final char[] characters = basis.toLowerCase().toCharArray();
-        final StringBuilder sb = new StringBuilder(characters.length);
-        for (char c : characters) {
+        final StringBuilder sb = new StringBuilder(basis.length());
+        for (int i = 0; i < basis.length(); i++) {
+            final char c = basis.charAt(i);
             if (Character.isLetter(c)) {
                 sb.append((c - 'a') + 10);
             } else {
@@ -104,7 +165,7 @@ public class Finance extends AbstractProvider<BaseProviders> {
             }
         }
 
-        int mod97 = new BigInteger(sb.toString()).mod(BigInteger.valueOf(97L)).intValue();
+        int mod97 = new BigInteger(sb.toString()).mod(A_CODE).intValue();
         return padLeftZeros(String.valueOf(98 - mod97), 2);
     }
 

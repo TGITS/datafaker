@@ -4,35 +4,25 @@ import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-public class ComputerTest extends BaseFakerTest<BaseFaker> {
+import java.util.List;
+import java.util.Collection;
 
-    @Test
-    void testType() {
-        assertThat(faker.computer().type()).isNotEmpty();
-    }
+class ComputerTest extends BaseFakerTest<BaseFaker> {
 
-    @Test
-    void testPlatform() {
-        assertThat(faker.computer().platform()).isNotEmpty();
-    }
+    Computer computer = faker.computer();
 
     @Test
     void testOperatingSystem() {
-        assertThat(faker.computer().operatingSystem()).isNotEmpty();
+        assertThat(computer.operatingSystem()).isNotEmpty();
     }
 
-    @Test
-    void testLinux() {
-        assertThat(faker.computer().linux()).isNotEmpty();
-    }
-
-    @Test
-    void testMacos() {
-        assertThat(faker.computer().macos()).isNotEmpty();
-    }
-
-    @Test
-    void testWindows() {
-        assertThat(faker.computer().windows()).isNotEmpty();
+    @Override
+    protected Collection<TestSpec> providerListTest() {
+        return List.of(TestSpec.of(computer::type, "computer.type"),
+                TestSpec.of(computer::platform, "computer.platform"),
+                TestSpec.of(computer::linux, "computer.os.linux"),
+                TestSpec.of(computer::macos, "computer.os.macos"),
+                TestSpec.of(computer::windows, "computer.os.windows"),
+                TestSpec.of(computer::brand, "computer.brand"));
     }
 }

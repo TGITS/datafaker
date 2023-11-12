@@ -1,13 +1,13 @@
 package net.datafaker.providers.base;
 
+
 import java.sql.Timestamp;
 import java.text.SimpleDateFormat;
 import java.time.Duration;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.OffsetDateTime;
+import java.time.LocalTime;
 import java.time.Period;
-import java.time.ZoneId;
-import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
 import java.util.Date;
 import java.util.Locale;
@@ -22,6 +22,7 @@ import java.util.concurrent.TimeUnit;
 public class DateAndTime extends AbstractProvider<BaseProviders> {
     private static final int DEFAULT_MIN_AGE = 18;
     private static final int DEFAULT_MAX_AGE = 65;
+    public static final long DAYS_NANOS = TimeUnit.DAYS.toNanos(1L);
 
     protected DateAndTime(BaseProviders faker) {
         super(faker);
@@ -233,6 +234,15 @@ public class DateAndTime extends AbstractProvider<BaseProviders> {
     }
 
     /**
+     * Generates a random birthday between 65 and 18 years ago from now as LocalDate.
+     *
+     * @return a random birthday between 65 and 18 years ago from now.
+     */
+    public LocalDate birthdayLocalDate() {
+        return birthdayLocalDate(DEFAULT_MIN_AGE, DEFAULT_MAX_AGE);
+    }
+
+    /**
      * Generates a string representation of a random birthday between 65 and 18 years ago from now.
      *
      * @param pattern date time pattern to convert to string.
@@ -248,21 +258,38 @@ public class DateAndTime extends AbstractProvider<BaseProviders> {
      * @param minAge the minimal age
      * @param maxAge the maximal age
      * @return a random birthday between {@code minAge} and {@code maxAge} years ago from now.
-     * @throws IllegalArgumentException if the {@code maxAge} is lower than {@code minAge}.
+     * Negative {@code minAge} and {@code maxAge} are supported.
      */
     public Timestamp birthday(int minAge, int maxAge) {
-        LocalDateTime nw = LocalDateTime.now();
-        LocalDateTime from = LocalDateTime.of(nw.getYear() - maxAge, nw.getMonth(), nw.getDayOfMonth(), 0, 0, 0);
-        LocalDateTime to = LocalDateTime.of(nw.getYear() - minAge, nw.getMonth(), nw.getDayOfMonth(), 0, 0, 0);
-        ZoneOffset offset = OffsetDateTime.now().getOffset();
-        final long start = from.toEpochSecond(offset);
-        final long stop = to.toEpochSecond(offset);
-        if (start == stop) {
-            return Timestamp.from(from.toInstant(ZoneId.systemDefault().getRules().getOffset(from)));
+        final LocalDate localDate = LocalDate.now();
+        final LocalDate from = localDate.minusYears(maxAge);
+        if (minAge == maxAge) {
+            return Timestamp.valueOf(LocalDateTime.of(from, LocalTime.MIDNIGHT));
         }
-        final long offsetMillis = faker.random().nextLong(stop - start);
-        LocalDateTime res = LocalDateTime.ofEpochSecond(start + offsetMillis, 0, offset);
-        return Timestamp.from(res.toInstant(ZoneId.systemDefault().getRules().getOffset(res)));
+        final long start = from.toEpochDay();
+        final long stop = localDate.minusYears(minAge).toEpochDay();
+        final LocalDate date = LocalDate.ofEpochDay(faker.random().nextLong(start, stop));
+        return Timestamp.valueOf(
+            LocalDateTime.of(date, LocalTime.ofNanoOfDay(faker.number().numberBetween(0, DAYS_NANOS))));
+    }
+
+    /**
+     * Generates a random birthday between two ages from now as LocalDate.
+     *
+     * @param minAge the minimal age
+     * @param maxAge the maximal age
+     * @return a random birthday between {@code minAge} and {@code maxAge} years ago from now.
+     * Negative {@code minAge} and {@code maxAge} are supported.
+     */
+    public LocalDate birthdayLocalDate(int minAge, int maxAge) {
+        final LocalDate localDate = LocalDate.now();
+        final LocalDate from = localDate.minusYears(maxAge);
+        if (minAge == maxAge) {
+            return from;
+        }
+        final long start = from.toEpochDay();
+        final long stop = localDate.minusYears(minAge).toEpochDay();
+        return LocalDate.ofEpochDay(faker.random().nextLong(start, stop));
     }
 
     /**
@@ -357,31 +384,16 @@ public class DateAndTime extends AbstractProvider<BaseProviders> {
         if (unit == null || unit.trim().isEmpty()) {
             throw new IllegalArgumentException("Illegal duration unit '" + unit + "'");
         }
-        switch (unit.toUpperCase(Locale.ROOT)) {
-            case "NANO":
-            case "NANOS":
-                return ChronoUnit.NANOS;
-            case "MICRO":
-            case "MICROS":
-                return ChronoUnit.MICROS;
-            case "MILLI":
-            case "MILLIS":
-                return ChronoUnit.MILLIS;
-            case "SECOND":
-            case "SECONDS":
-                return ChronoUnit.SECONDS;
-            case "MINUTE":
-            case "MINUTES":
-                return ChronoUnit.MINUTES;
-            case "HOUR":
-            case "HOURS":
-                return ChronoUnit.HOURS;
-            case "DAY":
-            case "DAYS":
-                return ChronoUnit.DAYS;
-            default:
-                throw new IllegalArgumentException("Illegal duration unit '" + unit + "'");
-        }
+        return switch (unit.toUpperCase(Locale.ROOT)) {
+            case "NANO", "NANOS" -> ChronoUnit.NANOS;
+            case "MICRO", "MICROS" -> ChronoUnit.MICROS;
+            case "MILLI", "MILLIS" -> ChronoUnit.MILLIS;
+            case "SECOND", "SECONDS" -> ChronoUnit.SECONDS;
+            case "MINUTE", "MINUTES" -> ChronoUnit.MINUTES;
+            case "HOUR", "HOURS" -> ChronoUnit.HOURS;
+            case "DAY", "DAYS" -> ChronoUnit.DAYS;
+            default -> throw new IllegalArgumentException("Illegal duration unit '" + unit + "'");
+        };
     }
 
     private Duration generateDuration(long value, ChronoUnit unit) {

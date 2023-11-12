@@ -6,6 +6,8 @@ import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 
 import java.lang.reflect.InvocationTargetException;
+import java.util.List;
+import java.util.Collection;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -14,6 +16,7 @@ import static org.mockito.Mockito.when;
 class RelationshipTest extends BaseFakerTest<BaseFaker> {
 
     private BaseFaker mockFaker;
+    private final Relationship relationship = faker.relationships();
 
     @BeforeEach
     protected void before() {
@@ -23,37 +26,17 @@ class RelationshipTest extends BaseFakerTest<BaseFaker> {
 
     @RepeatedTest(100)
     void anyTest() {
-        assertThat(faker.relationships().any()).isNotEmpty();
+        assertThat(relationship.any()).isNotEmpty();
     }
 
-    @Test
-    void directTest() {
-        assertThat(faker.relationships().direct()).isNotEmpty();
-    }
-
-    @Test
-    void extendedTest() {
-        assertThat(faker.relationships().extended()).isNotEmpty();
-    }
-
-    @Test
-    void inLawTest() {
-        assertThat(faker.relationships().inLaw()).isNotEmpty();
-    }
-
-    @Test
-    void spouseTest() {
-        assertThat(faker.relationships().spouse()).isNotEmpty();
-    }
-
-    @Test
-    void parentTest() {
-        assertThat(faker.relationships().parent()).isNotEmpty();
-    }
-
-    @Test
-    void siblingTest() {
-        assertThat(faker.relationships().sibling()).isNotEmpty();
+    @Override
+    protected Collection<TestSpec> providerListTest() {
+        return List.of(TestSpec.of(relationship::direct, "relationship.familial.direct"),
+                TestSpec.of(relationship::extended, "relationship.familial.extended"),
+                TestSpec.of(relationship::inLaw, "relationship.in_law"),
+                TestSpec.of(relationship::spouse, "relationship.spouse"),
+                TestSpec.of(relationship::parent, "relationship.parent"),
+                TestSpec.of(relationship::sibling, "relationship.sibling"));
     }
 
     @Test

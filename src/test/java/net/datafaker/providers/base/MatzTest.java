@@ -1,13 +1,13 @@
 package net.datafaker.providers.base;
 
-import org.junit.jupiter.api.Test;
-
-import static org.assertj.core.api.Assertions.assertThat;
+import java.util.List;
+import java.util.Collection;
 
 class MatzTest extends BaseFakerTest<BaseFaker> {
 
-    @Test
-    void quote() {
-        assertThat(faker.matz().quote()).isNotEmpty();
+    @Override
+    protected Collection<TestSpec> providerListTest() {
+        Matz matz = faker.matz();
+        return List.of(TestSpec.of(matz::quote, "matz.quotes"));
     }
 }

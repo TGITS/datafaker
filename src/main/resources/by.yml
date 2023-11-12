@@ -1,3 +1,4 @@
+#NOTE: this file is deprecated version for 'be' locale. Please keep the contents identical to `be.yml`.
 by:
   faker:
     separator: " і "

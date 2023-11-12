@@ -1,17 +1,19 @@
 package net.datafaker.providers.base;
 
-import net.datafaker.service.FakerIDN;
+import net.datafaker.internal.helper.FakerIDN;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.regex.Pattern;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 
 /**
  * @since 0.8.0
  */
 public class Company extends AbstractProvider<BaseProviders> {
 
-    private static final Pattern UNWANTED_CHARACTERS = Pattern.compile("[.,' ]");
+    private volatile List<String> allBuzzwords = null;
+    private final Lock lock = new ReentrantLock();
 
     protected Company(BaseProviders faker) {
         super(faker);
@@ -34,13 +36,23 @@ public class Company extends AbstractProvider<BaseProviders> {
     }
 
     public String buzzword() {
-        @SuppressWarnings("unchecked")
-        List<List<String>> buzzwordLists = (List<List<String>>) faker.fakeValuesService().fetchObject("company.buzzwords", faker.getContext());
-        List<String> buzzwords = new ArrayList<>();
-        for (List<String> buzzwordList : buzzwordLists) {
-            buzzwords.addAll(buzzwordList);
+        if (allBuzzwords == null) {
+            try {
+                lock.lock();
+                if (allBuzzwords == null) {
+                    @SuppressWarnings("unchecked")
+                    List<List<String>> buzzwordLists = (List<List<String>>) faker.fakeValuesService().fetchObject("company.buzzwords", faker.getContext());
+                    List<String> buzzwords = new ArrayList<>();
+                    for (List<String> buzzwordList : buzzwordLists) {
+                        buzzwords.addAll(buzzwordList);
+                    }
+                    allBuzzwords = buzzwords;
+                }
+            } finally {
+                lock.unlock();
+            }
         }
-        return buzzwords.get(faker.random().nextInt(buzzwords.size()));
+        return allBuzzwords.get(faker.random().nextInt(allBuzzwords.size()));
     }
 
     /**
@@ -70,15 +82,22 @@ public class Company extends AbstractProvider<BaseProviders> {
     }
 
     public String url() {
-        return String.join(".",
-            "www",
-            FakerIDN.toASCII(domainName()),
-            domainSuffix()
-        );
+        return "www."
+            + FakerIDN.toASCII(domainName()) + "."
+            + domainSuffix();
     }
 
     private String domainName() {
-        return UNWANTED_CHARACTERS.matcher(name().toLowerCase(faker.getContext().getLocale())).replaceAll("");
+        final char[] res = name().toLowerCase(faker.getContext().getLocale()).toCharArray();
+        int offset = 0;
+        for (int i = 0; i < res.length; i++) {
+            final char c = res[i];
+            switch (c) {
+                case '.', ',', '\'', ' ', ']' -> offset++;
+                default -> res[i - offset] = res[i];
+            }
+        }
+        return String.valueOf(res, 0, res.length - offset);
     }
 
     private String domainSuffix() {

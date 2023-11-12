@@ -8,6 +8,7 @@ import net.datafaker.transformations.Schema;
 import net.datafaker.transformations.SimpleField;
 import net.datafaker.transformations.Transformer;
 
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.StringJoiner;
@@ -41,6 +42,10 @@ public class SqlTransformer<IN> implements Transformer<IN, CharSequence> {
 
     private final SqlDialect dialect;
 
+    public static <IN> SqlTransformer.SqlTransformerBuilder<IN> builder() {
+        return new SqlTransformer.SqlTransformerBuilder<>();
+    }
+
     private SqlTransformer(String schemaName, String tableName, char quote, SqlDialect dialect, String sqlIdentifier,
                            Casing casing, boolean withBatchMode, int batchSize, Case keywordCase, boolean forceSqlQuoteIdentifierUsage) {
         this.schemaName = schemaName;
@@ -60,10 +65,10 @@ public class SqlTransformer<IN> implements Transformer<IN, CharSequence> {
         if (forceSqlQuoteIdentifierUsage) return true;
         for (int i = 0; i < name.length(); i++) {
             if (casing == Casing.TO_UPPER && Character.isLowerCase(name.charAt(i))
-                || casing == Casing.TO_LOWER && Character.isUpperCase(name.charAt(i))
-                || name.charAt(i) == openSqlIdentifier
-                || name.charAt(i) == closeSqlIdentifier
-                || name.charAt(i) == DEFAULT_CATALOG_SEPARATOR) {
+                    || casing == Casing.TO_LOWER && Character.isUpperCase(name.charAt(i))
+                    || name.charAt(i) == openSqlIdentifier
+                    || name.charAt(i) == closeSqlIdentifier
+                    || name.charAt(i) == DEFAULT_CATALOG_SEPARATOR) {
                 return true;
             }
         }
@@ -82,69 +87,55 @@ public class SqlTransformer<IN> implements Transformer<IN, CharSequence> {
         if (fields.length == 0) {
             return EMPTY_RESULT;
         }
-        StringBuilder sb = new StringBuilder();
         if (withBatchMode) {
             if (rowId == 0 || batchSize > 0 && rowId % batchSize == 0) {
-                sb.append(
-                    SqlDialect.getFirstRow(
-                        dialect, () -> appendTableInfo(fields), () -> addValues(input, fields), keywordCase));
+                return SqlDialect.getFirstRow(
+                        dialect, () -> appendTableInfo(fields), () -> addValues(input, fields), keywordCase);
             } else {
-                sb.append(",")
-                    .append(LINE_SEPARATOR)
-                    .append(
+                return String.join(LINE_SEPARATOR, ",",
                         SqlDialect.getOtherRow(
-                            dialect, () -> appendTableInfo(fields), () -> addValues(input, fields), keywordCase));
+                        dialect, () -> appendTableInfo(fields), () -> addValues(input, fields), keywordCase));
             }
         } else {
-            sb.append(INSERT_INTO.getValue(keywordCase))
-                .append(" ")
-                .append(appendTableInfo(fields))
-                .append(" ")
-                .append(VALUES.getValue(keywordCase))
-                .append(" ")
-                .append(addValues(input, fields));
+            return String.join(" ", INSERT_INTO.getValue(keywordCase),
+                    appendTableInfo(fields),
+                    VALUES.getValue(keywordCase),
+                    addValues(input, fields));
         }
-
-        return sb.toString();
     }
 
     private String addValues(IN input, Field<?, ? extends CharSequence>[] fields) {
-        StringBuilder result = new StringBuilder();
+        StringJoiner result = new StringJoiner(", ");
         for (int i = 0; i < fields.length; i++) {
             if (fields[i] instanceof SimpleField) {
                 //noinspection unchecked
                 Object value = ((SimpleField<Object, ? extends CharSequence>) fields[i]).transform(input);
                 Class<?> clazz = value == null ? null : value.getClass();
                 if (value == null
-                    || value instanceof Number
-                    || value instanceof Boolean
-                    || clazz.isPrimitive()) {
-                    result.append(value);
+                        || value instanceof Number
+                        || value instanceof Boolean
+                        || clazz.isPrimitive()) {
+                    result.add(String.valueOf(value));
                 } else if (clazz.isArray()) {
-                    result.append(ARRAY.getValue(keywordCase)).append("[");
                     final Class<?> componentType = clazz.getComponentType();
-                    result.append(componentType.isPrimitive()
-                        ? handlePrimitivesInArray(componentType, value)
-                        : handleObjectInArray(value));
-                    result.append("]");
+                    result.add(ARRAY.getValue(keywordCase) + "[" +
+                            (componentType.isPrimitive()
+                                    ? handlePrimitivesInArray(componentType, value)
+                                    : handleObjectInArray(value)) + "]");
                 } else if (value instanceof Collection) {
-                    result.append(MULTISET.getValue(keywordCase)).append("[");
-                    result.append(handleObjectInCollection(value));
-                    result.append("]");
+                    result.add(MULTISET.getValue(keywordCase) + "[" +
+                            handleObjectInCollection(value) + "]");
                 } else {
-                    result.append(handleObject(value));
+                    result.add(handleObject(value));
                 }
             } else if (fields[i] instanceof CompositeField) {
-                result.append(ROW.getValue(keywordCase));
-                result.append(addValues(input, ((CompositeField) fields[i]).getFields()));
+                result.add(ROW.getValue(keywordCase) + addValues(input, ((CompositeField) fields[i]).getFields()));
             } else {
                 throw new IllegalArgumentException(fields[i] + " not supported");
             }
-            if (i < fields.length - 1) {
-                result.append(", ");
-            }
         }
-        return result.length() > 0 ? "(" + result + ")" : result.toString();
+        String res = result.toString();
+        return !res.isEmpty() ? "(" + res + ")" : res;
     }
 
     private String handleObjectInArray(Object value) {
@@ -174,80 +165,82 @@ public class SqlTransformer<IN> implements Transformer<IN, CharSequence> {
     }
 
     private String handleObject(Object value) {
-        StringBuilder result = new StringBuilder();
         if (value == null) {
-            result.append(NULL.getValue(keywordCase));
+            return NULL.getValue(keywordCase);
         } else {
             if (value.getClass().isArray()) {
-                result.append(ARRAY.getValue(keywordCase)).append("[");
                 final Class<?> componentType = value.getClass().getComponentType();
-                result.append(componentType.isPrimitive()
-                    ? handlePrimitivesInArray(componentType, value)
-                    : handleObjectInArray(value));
-                result.append("]");
+                String array = componentType.isPrimitive()
+                        ? handlePrimitivesInArray(componentType, value)
+                        : handleObjectInArray(value);
+                return ARRAY.getValue(keywordCase) + "[" + array + "]";
             } else if (value instanceof Collection) {
-                result.append(MULTISET.getValue(keywordCase)).append("[");
-                result.append(handleObjectInCollection(value));
-                result.append("]");
+                return MULTISET.getValue(keywordCase)
+                        + "[" + handleObjectInCollection(value) + "]";
             } else {
-                boolean quoteRequired = !(value instanceof Number) && !(value instanceof Boolean);
-                if (quoteRequired) {
-                    result.append(quote);
-                }
-
                 String strValue = value.toString();
-                for (int k = 0; k < strValue.length(); k++) {
-                    if (strValue.charAt(k) == quote) {
-                        result.append(quote);
-                    }
-                    result.append(strValue.charAt(k));
-                }
-                if (quoteRequired) {
-                    result.append(quote);
-                }
+                final int length = strValue.length();
+                final boolean quoteRequired = !(value instanceof Number) && !(value instanceof Boolean);
+                String res = handledObjectToString(length, strValue);
+                return quoteRequired ? quote + res + quote : res;
             }
         }
-        return result.toString();
+    }
+
+    private String handledObjectToString(int length, String strValue) {
+        StringJoiner joiner = null;
+
+        int j = 0;
+        for (int k = 0; k < length; k++) {
+            if (strValue.charAt(k) == quote) {
+                if (joiner == null) {
+                    joiner = new StringJoiner("" + quote);
+                }
+                joiner.add(strValue.substring(j, k + 1));
+                j = k + 1;
+            }
+        }
+        return joiner == null ? strValue : joiner.toString();
     }
 
     private String handlePrimitivesInArray(Class<?> componentType, Object value) {
         StringJoiner joiner = new StringJoiner(", ");
         if (componentType == byte.class) {
             byte[] array = (byte[]) value;
-            for (int j = 0; j < array.length; j++) {
-                joiner.add(String.valueOf(array[j]));
+            for (byte b : array) {
+                joiner.add(String.valueOf(b));
             }
         }
         if (componentType == short.class) {
             short[] array = (short[]) value;
-            for (int j = 0; j < array.length; j++) {
-                joiner.add(String.valueOf(array[j]));
+            for (short i : array) {
+                joiner.add(String.valueOf(i));
             }
         }
         if (componentType == boolean.class) {
             boolean[] array = (boolean[]) value;
-            for (int j = 0; j < array.length; j++) {
-                joiner.add(String.valueOf(array[j]));
+            for (boolean b : array) {
+                joiner.add(String.valueOf(b));
             }
         } else if (componentType == int.class) {
             int[] array = (int[]) value;
-            for (int j = 0; j < array.length; j++) {
-                joiner.add(String.valueOf(array[j]));
+            for (int i : array) {
+                joiner.add(String.valueOf(i));
             }
         } else if (componentType == long.class) {
             long[] array = (long[]) value;
-            for (int j = 0; j < array.length; j++) {
-                joiner.add(String.valueOf(array[j]));
+            for (long l : array) {
+                joiner.add(String.valueOf(l));
             }
         } else if (componentType == float.class) {
             float[] array = (float[]) value;
-            for (int j = 0; j < array.length; j++) {
-                joiner.add(String.valueOf(array[j]));
+            for (float v : array) {
+                joiner.add(String.valueOf(v));
             }
         } else if (componentType == double.class) {
             double[] array = (double[]) value;
-            for (int j = 0; j < array.length; j++) {
-                joiner.add(String.valueOf(array[j]));
+            for (double v : array) {
+                joiner.add(String.valueOf(v));
             }
         }
         return joiner.toString();
@@ -269,7 +262,7 @@ public class SqlTransformer<IN> implements Transformer<IN, CharSequence> {
             }
             for (int j = 0; j < fieldName.length(); j++) {
                 if (openSqlIdentifier == fieldName.charAt(j)
-                    || closeSqlIdentifier == fieldName.charAt(j)) {
+                        || closeSqlIdentifier == fieldName.charAt(j)) {
                     result.append(openSqlIdentifier);
                 }
                 result.append(fieldName.charAt(j));
@@ -299,20 +292,27 @@ public class SqlTransformer<IN> implements Transformer<IN, CharSequence> {
     }
 
     @Override
-    public String generate(FakeSequence<IN> input, Schema<IN, ?> schema) {
+    public String generate(Iterable<IN> input, Schema<IN, ?> schema) {
         if (schema.getFields().length == 0) {
             return EMPTY_RESULT;
         }
-        if (input.isInfinite()) {
+        if (input instanceof FakeSequence && ((FakeSequence) input).isInfinite()) {
             throw new IllegalArgumentException("The sequence should be finite of size");
         }
 
         List<IN> inputs;
         if (input instanceof FakeStream) {
-            Stream<IN> stream = input.get();
+            Stream<IN> stream = ((FakeStream) input).get();
             inputs = stream.collect(Collectors.toList());
+        } else if (input instanceof FakeSequence) {
+            inputs = ((FakeSequence<Object>) input).get();
+        } else if (input instanceof List) {
+            inputs = (List<IN>) input;
         } else {
-            inputs = input.get();
+            inputs = new ArrayList<>();
+            for (IN o : input) {
+                inputs.add(o);
+            }
         }
 
         int limit = inputs.size();
@@ -342,10 +342,10 @@ public class SqlTransformer<IN> implements Transformer<IN, CharSequence> {
         for (int i = 0; i < limit; i++) {
             IN input = inputs != null ? inputs.get(i) : null;
             sb.append(apply(input, schema, i));
-            if (i == limit - 1 && sb.length() > 0 || batchSize > 0 && (i + 1) % batchSize == 0) {
+            if (i == limit - 1 && !sb.isEmpty() || batchSize > 0 && (i + 1) % batchSize == 0) {
                 sb.append(SqlDialect.getLastRowSuffix(dialect, keywordCase));
                 sb.append(";");
-                if (i < limit - 1 && sb.length() > 0) {
+                if (i < limit - 1 && !sb.isEmpty()) {
                     sb.append(LINE_SEPARATOR);
                 }
             }
@@ -433,18 +433,19 @@ public class SqlTransformer<IN> implements Transformer<IN, CharSequence> {
         public SqlTransformer<IN> build() {
             if (dialect == null) {
                 return new SqlTransformer<>(
-                    schemaName, tableName, quote, dialect, sqlQuoteIdentifier, casing, withBatchMode, batchSize, keywordCase, forceSqlQuoteIdentifierUsage);
+                        schemaName, tableName, quote, null, sqlQuoteIdentifier, casing, withBatchMode, batchSize, keywordCase, forceSqlQuoteIdentifierUsage);
+            } else {
+                return new SqlTransformer<>(
+                        schemaName, tableName, quote, dialect, dialect.getSqlQuoteIdentifier(), dialect.getUnquotedCasing(),
+                        withBatchMode, batchSize, keywordCase, forceSqlQuoteIdentifierUsage);
             }
-            return new SqlTransformer<>(
-                schemaName, tableName, quote, dialect, dialect.getSqlQuoteIdentifier(), dialect.getUnquotedCasing(),
-                withBatchMode, batchSize, keywordCase, forceSqlQuoteIdentifierUsage);
         }
     }
 
     public enum Case {
         CAPITAL,
         LOWERCASE,
-        UPPERCASE;
+        UPPERCASE
     }
 
     enum SQLKeyWords {
@@ -468,16 +469,11 @@ public class SqlTransformer<IN> implements Transformer<IN, CharSequence> {
         }
 
         public String getValue(Case caze) {
-            switch (caze) {
-                case UPPERCASE:
-                    return upperCaseValue;
-                case LOWERCASE:
-                    return lowerCaseValue;
-                case CAPITAL:
-                    return capitalValue;
-                default:
-                    throw new IllegalArgumentException("Unknown case " + caze);
-            }
+            return switch (caze) {
+                case UPPERCASE -> upperCaseValue;
+                case LOWERCASE -> lowerCaseValue;
+                case CAPITAL -> capitalValue;
+            };
         }
     }
 }

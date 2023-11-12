@@ -1,34 +1,18 @@
 package net.datafaker.providers.base;
 
-import org.junit.jupiter.api.Test;
-
-import static org.assertj.core.api.Assertions.assertThat;
+import java.util.List;
+import java.util.Collection;
 
 class MilitaryTest extends BaseFakerTest<BaseFaker> {
 
-    @Test
-    void armyRank() {
-        assertThat(faker.military().armyRank()).isNotEmpty();
-    }
-
-    @Test
-    void marinesRank() {
-        assertThat(faker.military().marinesRank()).isNotEmpty();
-    }
-
-    @Test
-    void navyRank() {
-        assertThat(faker.military().navyRank()).isNotEmpty();
-    }
-
-    @Test
-    void airForceRank() {
-        assertThat(faker.military().airForceRank()).isNotEmpty();
-    }
-
-    @Test
-    void dodPaygrade() {
-        assertThat(faker.military().dodPaygrade()).isNotEmpty();
+    @Override
+    protected Collection<TestSpec> providerListTest() {
+        Military military = faker.military();
+        return List.of(TestSpec.of(military::armyRank, "military.army_rank"),
+                TestSpec.of(military::marinesRank, "military.marines_rank"),
+                TestSpec.of(military::navyRank, "military.navy_rank"),
+                TestSpec.of(military::airForceRank, "military.air_force_rank"),
+                TestSpec.of(military::dodPaygrade, "military.dod_paygrade"));
     }
 
 }

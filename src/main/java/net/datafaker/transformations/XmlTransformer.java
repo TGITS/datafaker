@@ -30,8 +30,8 @@ public class XmlTransformer<IN> implements Transformer<IN, CharSequence> {
     }
 
     @Override
-    public String generate(FakeSequence<IN> input, Schema<IN, ?> schema) {
-        if (input.isInfinite()) {
+    public String generate(Iterable<IN> input, Schema<IN, ?> schema) {
+        if (input instanceof FakeSequence && ((FakeSequence) input).isInfinite()) {
             throw new IllegalArgumentException("The sequence should be finite of size");
         }
 
@@ -96,8 +96,7 @@ public class XmlTransformer<IN> implements Transformer<IN, CharSequence> {
         }
 
         Object xmlNodeValue = field.transform(input);
-        if (xmlNodeValue instanceof Collection) {
-            Collection<?> children = (Collection<?>) xmlNodeValue;
+        if (xmlNodeValue instanceof Collection<?> children) {
             if (children.isEmpty()) {
                 applyValue(sb, tag, null);
             } else {
@@ -145,18 +144,14 @@ public class XmlTransformer<IN> implements Transformer<IN, CharSequence> {
     }
 
     private String offset(int length) {
-        StringBuilder sb = new StringBuilder();
-        for (int i = 0; i < length * INDENTATION_STEP; i++) {
-            sb.append(" ");
-        }
-        return sb.toString();
+        return " ".repeat(Math.max(0, length * INDENTATION_STEP));
     }
 
     private String escape(String str) {
         StringBuilder sb = new StringBuilder();
         for (int i = 0; i < str.length(); i++) {
             final char c = str.charAt(i);
-            sb.append(ESCAPING_MAP.getOrDefault(c, c + ""));
+            sb.append(ESCAPING_MAP.getOrDefault(c, String.valueOf(c)));
         }
         return sb.toString();
     }

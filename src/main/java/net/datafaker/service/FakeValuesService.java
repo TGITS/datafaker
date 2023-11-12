@@ -1,14 +1,18 @@
 package net.datafaker.service;
 
 import com.mifmif.common.regex.Generex;
-import net.datafaker.formats.Csv;
-import net.datafaker.formats.Format;
-import net.datafaker.formats.Json;
+import net.datafaker.internal.helper.COWMap;
+import net.datafaker.internal.helper.SingletonLocale;
 import net.datafaker.providers.base.AbstractProvider;
 import net.datafaker.providers.base.Address;
 import net.datafaker.providers.base.BaseFaker;
 import net.datafaker.providers.base.Name;
 import net.datafaker.providers.base.ProviderRegistration;
+import net.datafaker.transformations.CsvTransformer;
+import net.datafaker.transformations.Field;
+import net.datafaker.transformations.JsonTransformer;
+import net.datafaker.transformations.Schema;
+import net.datafaker.transformations.SimpleField;
 
 import java.io.IOException;
 import java.lang.reflect.Array;
@@ -17,6 +21,8 @@ import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.math.BigDecimal;
 import java.math.BigInteger;
+import java.net.MalformedURLException;
+import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -25,6 +31,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.IdentityHashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -35,43 +42,55 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.stream.Collectors;
 
+import static net.datafaker.transformations.Field.field;
+
 public class FakeValuesService {
     private static final char[] DIGITS = "0123456789".toCharArray();
     private static final String[] EMPTY_ARRAY = new String[0];
     private static final Logger LOG = Logger.getLogger("faker");
+    public static final Supplier<Map<String, Object>> MAP_STRING_OBJECT_SUPPLIER = () -> new COWMap<>(() -> new WeakHashMap<>());
+    public static final Supplier<Map<String, String>> MAP_STRING_STRING_SUPPLIER = () -> new COWMap<>(() -> new WeakHashMap<>());
 
-    private final Map<Locale, FakeValuesInterface> fakeValuesInterfaceMap = new HashMap<>();
-    public static final Locale DEFAULT_LOCALE = Locale.ENGLISH;
+    private final Map<SingletonLocale, FakeValuesInterface> fakeValuesInterfaceMap = new COWMap<>(IdentityHashMap::new);
+    public static final SingletonLocale DEFAULT_LOCALE = SingletonLocale.get(Locale.ENGLISH);
 
-    private final Map<Class<?>, Map<String, Collection<Method>>> class2methodsCache = new IdentityHashMap<>();
-    private final Map<Class<?>, Constructor<?>> class2constructorCache = new IdentityHashMap<>();
-    private final Map<String, Generex> expression2generex = new WeakHashMap<>();
-    private final Map<Locale, Map<String, String>> key2Expression = new WeakHashMap<>();
-    private final Map<String, String[]> args2splittedArgs = new WeakHashMap<>();
-    private final Map<String, String[]> key2splittedKey = new WeakHashMap<>();
+    private static final Map<Class<?>, Map<String, Collection<Method>>> CLASS_2_METHODS_CACHE = new COWMap<>(IdentityHashMap::new);
+    private static final Map<Class<?>, Constructor<?>> CLASS_2_CONSTRUCTOR_CACHE = new COWMap<>(IdentityHashMap::new);
 
-    private final Map<Locale, Map<String, Object>> key2fetchedObject = new WeakHashMap<>();
-    private final Map<String, String> name2yaml = new WeakHashMap<>();
-    private final Map<String, String> removedUnderscore = new WeakHashMap<>();
+    private static final JsonTransformer<Object> JSON_TRANSFORMER = JsonTransformer.builder().build();
 
-    private final Map<Class<?>, Map<String, Map<String[], MethodAndCoercedArgs>>> mapOfMethodAndCoercedArgs = new IdentityHashMap<>();
+    private final Map<String, Generex> expression2generex = new COWMap<>(WeakHashMap::new);
+    private final COWMap<SingletonLocale, Map<String, String>> key2Expression = new COWMap<>(IdentityHashMap::new);
+    private static final Map<String, String[]> ARGS_2_SPLITTED_ARGS = new COWMap<>(WeakHashMap::new);
 
-    private final Map<String, List<String>> EXPRESSION_2_SPLITTED = new WeakHashMap<>();
+    private static final Map<String, String[]> KEY_2_SPLITTED_KEY = new COWMap<>(WeakHashMap::new);
+
+    private final COWMap<SingletonLocale, Map<String, Object>> key2fetchedObject = new COWMap<>(IdentityHashMap::new);
+
+    private static final Map<String, String> NAME_2_YAML = new COWMap<>(WeakHashMap::new);
+
+    private static final Map<String, String> REMOVED_UNDERSCORE = new COWMap<>(WeakHashMap::new);
+    private static final Map<Class<?>, Map<String, Map<String[], MethodAndCoercedArgs>>> MAP_OF_METHOD_AND_COERCED_ARGS = new COWMap<>(IdentityHashMap::new);
+
+    private static final Map<String, String[]> EXPRESSION_2_SPLITTED = new COWMap<>(WeakHashMap::new);
+
+    private static final Map<RegExpContext, Supplier<?>> REGEXP2SUPPLIER_MAP = new COWMap<>(HashMap::new);
 
     public FakeValuesService() {
     }
 
-    public void updateFakeValuesInterfaceMap(List<Locale> locales) {
-        for (final Locale l : locales) {
+    public void updateFakeValuesInterfaceMap(List<SingletonLocale> locales) {
+        for (final SingletonLocale l : locales) {
             fakeValuesInterfaceMap.computeIfAbsent(l, this::getCachedFakeValue);
         }
     }
 
-    private FakeValuesInterface getCachedFakeValue(Locale locale) {
-        if (DEFAULT_LOCALE.equals(locale)) {
+    private FakeValuesInterface getCachedFakeValue(SingletonLocale locale) {
+        if (DEFAULT_LOCALE == locale) {
             return FakeValuesGrouping.getEnglishFakeValueGrouping();
         }
-        return new FakeValues(locale);
+
+        return FakeValues.of(FakeValuesContext.of(locale.getLocale()));
     }
 
     /**
@@ -86,16 +105,34 @@ public class FakeValuesService {
         if (path == null || Files.notExists(path) || Files.isDirectory(path) || !Files.isReadable(path)) {
             throw new IllegalArgumentException("Path should be an existing readable file");
         }
-        FakeValues fakeValues = new FakeValues(locale, path);
-        FakeValuesInterface existingFakeValues = fakeValuesInterfaceMap.get(locale);
-        if (existingFakeValues == null) {
-            fakeValuesInterfaceMap.putIfAbsent(locale, fakeValues);
-        } else {
-            FakeValuesGrouping fakeValuesGrouping = new FakeValuesGrouping();
-            fakeValuesGrouping.add(existingFakeValues);
-            fakeValuesGrouping.add(fakeValues);
-            fakeValuesInterfaceMap.put(locale, fakeValuesGrouping);
+        try {
+            addUrl(locale, path.toUri().toURL());
+        } catch (MalformedURLException e) {
+            throw new IllegalArgumentException(e);
         }
+    }
+
+    /**
+     * Allows adding urls of files with custom data. Data should be in YAML format.
+     *
+     * @param locale  the locale for which an url is going to be added.
+     * @param url     url of a file with YAML structure
+     * @throws IllegalArgumentException in case of invalid url
+     */
+    public void addUrl(Locale locale, URL url) {
+        Objects.requireNonNull(locale);
+        if (url == null) {
+            throw new IllegalArgumentException("url should be an existing readable file");
+        }
+        final FakeValues fakeValues = FakeValues.of(FakeValuesContext.of(locale, url));
+        final SingletonLocale sLocale = SingletonLocale.get(locale);
+        fakeValuesInterfaceMap.merge(sLocale, fakeValues,
+            (prevValue, newValue) -> {
+                FakeValuesGrouping fvg = new FakeValuesGrouping();
+                fvg.add(prevValue);
+                fvg.add(newValue);
+                return fvg;
+            });
     }
 
     /**
@@ -103,7 +140,7 @@ public class FakeValuesService {
      */
     public Object fetch(String key, FakerContext context) {
         List<?> valuesArray = null;
-        Object o = fetchObject(key, context);
+        final Object o = fetchObject(key, context);
         if (o instanceof List) {
             valuesArray = (List<?>) o;
             final int size = valuesArray.size();
@@ -157,7 +194,7 @@ public class FakeValuesService {
             }
             return values.get(context.getRandomService().nextInt(size));
         } else if (isSlashDelimitedRegex(str = o.toString())) {
-            return String.format("#{regexify '%s'}", trimRegexSlashes(str));
+            return "#{regexify '%s'}".formatted(trimRegexSlashes(str));
         } else {
             return (String) o;
         }
@@ -171,20 +208,23 @@ public class FakeValuesService {
      */
     public Object fetchObject(String key, FakerContext context) {
         Object result = null;
-        for (Locale locale : context.getLocaleChain()) {
+        final List<SingletonLocale> localeChain = context.getLocaleChain();
+        final boolean hasMoreThanOneLocales = localeChain.size() > 1;
+        for (SingletonLocale sLocale : localeChain) {
             // exclude default locale from cache checks
-            if (locale.equals(DEFAULT_LOCALE) && context.getLocaleChain().size() > 1) {
+            if (sLocale == DEFAULT_LOCALE && hasMoreThanOneLocales) {
                 continue;
             }
-            if (key2fetchedObject.get(locale) != null && (result = key2fetchedObject.get(locale).get(key)) != null) {
+            Map<String, Object> stringObjectMap = key2fetchedObject.get(sLocale);
+            if (stringObjectMap != null && (result = stringObjectMap.get(key)) != null) {
                 return result;
             }
         }
 
         String[] path = split(key);
-        Locale local2Add = null;
-        for (Locale locale : context.getLocaleChain()) {
-            Object currentValue = fakeValuesInterfaceMap.get(locale);
+        SingletonLocale local2Add = null;
+        for (SingletonLocale sLocale : localeChain) {
+            Object currentValue = fakeValuesInterfaceMap.get(sLocale);
             for (int p = 0; currentValue != null && p < path.length; p++) {
                 String currentPath = path[p];
                 if (currentValue instanceof Map) {
@@ -195,34 +235,34 @@ public class FakeValuesService {
             }
             result = currentValue;
             if (result != null) {
-                local2Add = locale;
-                key2fetchedObject.putIfAbsent(local2Add, new HashMap<>());
+                local2Add = sLocale;
                 break;
             }
         }
         if (local2Add != null) {
-            key2fetchedObject.get(local2Add).put(key, result);
+            key2fetchedObject.updateNestedValue(local2Add, MAP_STRING_OBJECT_SUPPLIER, key, result);
         }
         return result;
     }
 
     private String[] split(String string) {
-        String[] result = key2splittedKey.get(string);
+        String[] result = KEY_2_SPLITTED_KEY.get(string);
         if (result != null) {
             return result;
         }
         int size = 0;
-        char splitChar = '.';
-        for (int i = 0; i < string.length(); i++) {
+        final char splitChar = '.';
+        final int length = string.length();
+        for (int i = 0; i < length; i++) {
             if (string.charAt(i) == splitChar) {
                 size++;
             }
         }
         result = new String[size + 1];
-        char[] chars = string.toCharArray();
+        final char[] chars = string.toCharArray();
         int start = 0;
         int j = 0;
-        for (int i = 0; i < string.length(); i++) {
+        for (int i = 0; i < length; i++) {
             if (string.charAt(i) == splitChar) {
                 if (i - start > 0) {
                     result[j++] = String.valueOf(chars, start, i - start);
@@ -231,12 +271,13 @@ public class FakeValuesService {
             }
         }
         result[j] = String.valueOf(chars, start, chars.length - start);
-        key2splittedKey.put(string, result);
+        KEY_2_SPLITTED_KEY.putIfAbsent(string, result);
         return result;
     }
 
     /**
-     * Returns a string with the '#' characters in the parameter replaced with random digits between 0-9 inclusive.
+     * Returns a string with the '#' characters in the parameter replaced with random digits between 0-9 inclusive or
+     * random digits in the range from 1-9 when Ø (not zero) is used.
      * <p>
      * For example, the string "ABC##EFG" could be replaced with a string like "ABC99EFG".
      */
@@ -261,26 +302,27 @@ public class FakeValuesService {
     }
 
     private String bothify(String input, FakerContext context, boolean isUpper, boolean numerify, boolean letterify) {
-        final int baseChar = isUpper ? 65 : 97;
-        char[] res = input.toCharArray();
+        final int baseChar = isUpper ? 'A' : 'a';
+        final char[] res = input.toCharArray();
         for (int i = 0; i < res.length; i++) {
             switch (res[i]) {
-                case '#':
+                case '#' -> {
                     if (numerify) {
                         res[i] = DIGITS[context.getRandomService().nextInt(10)];
                     }
-                    break;
-                case 'Ø':
+                }
+                case 'Ø' -> {
                     if (numerify) {
                         res[i] = DIGITS[context.getRandomService().nextInt(1, 9)];
                     }
-                    break;
-                case '?':
+                }
+                case '?' -> {
                     if (letterify) {
                         res[i] = (char) (baseChar + context.getRandomService().nextInt(26)); // a-z
                     }
-                default:
-                    break;
+                }
+                default -> {
+                }
             }
         }
 
@@ -295,7 +337,7 @@ public class FakeValuesService {
         if (generex == null) {
             generex = new Generex(regex);
             generex.setSeed(context.getRandomService().nextLong());
-            expression2generex.put(regex, generex);
+            expression2generex.putIfAbsent(regex, generex);
         }
         return generex.random();
     }
@@ -307,7 +349,7 @@ public class FakeValuesService {
         if (example == null) {
             return null;
         }
-        char[] chars = example.toCharArray();
+        final char[] chars = example.toCharArray();
 
         for (int i = 0; i < chars.length; i++) {
             if (Character.isLetter(chars[i])) {
@@ -346,7 +388,7 @@ public class FakeValuesService {
      * characters from options
      */
     public String templatify(String letterString, char char2replace, FakerContext context, String... options) {
-        return templatify(letterString, Collections.singletonMap(char2replace, options), context);
+        return templatify(letterString, Map.of(char2replace, options), context);
     }
 
     /**
@@ -378,7 +420,7 @@ public class FakeValuesService {
         return resolve(key, current, root, () -> key + " resulted in null expression", context);
     }
 
-    public String resolve(String key, AbstractProvider provider, FakerContext context) {
+    public String resolve(String key, AbstractProvider<?> provider, FakerContext context) {
         return resolve(key, provider, provider.getFaker(), () -> key + " resulted in null expression", context);
     }
 
@@ -390,12 +432,12 @@ public class FakeValuesService {
      * #{Person.hello_someone} will result in a method call to person.helloSomeone();
      */
     public String resolve(String key, Object current, ProviderRegistration root, Supplier<String> exceptionMessage, FakerContext context) {
-        String expression = root == null ? key2Expression.get(context.getLocale()).get(key) : null;
+        String expression = root == null ? key2Expression.get(context.getSingletonLocale()).get(key) : null;
         if (expression == null) {
             expression = safeFetch(key, context, null);
             if (root == null) {
-                key2Expression.putIfAbsent(context.getLocale(), new HashMap<>());
-                key2Expression.get(context.getLocale()).put(key, expression);
+                key2Expression.updateNestedValue(context.getSingletonLocale(),
+                    MAP_STRING_STRING_SUPPLIER, key, expression);
             }
         }
 
@@ -431,7 +473,7 @@ public class FakeValuesService {
      * This method uses default separator, quote and always prints header.
      */
     public String csv(int limit, String... columnExpressions) {
-        return csv(Csv.DEFAULT_SEPARATOR, Csv.DEFAULT_QUOTE, true, limit, columnExpressions);
+        return csv(CsvTransformer.DEFAULT_SEPARATOR, CsvTransformer.DEFAULT_QUOTE, true, limit, columnExpressions);
     }
 
     /**
@@ -441,50 +483,54 @@ public class FakeValuesService {
         if (columnExpressions.length % 2 != 0) {
             throw new IllegalArgumentException("Total number of column names and column values should be even");
         }
-        Csv.Column[] columns = new Csv.Column[columnExpressions.length / 2];
+        Field<String, String>[] fields = new Field[columnExpressions.length / 2];
         for (int i = 0; i < columnExpressions.length; i += 2) {
             final int index = i;
-            columns[i / 2] = Csv.Column.of(() -> columnExpressions[index], () -> columnExpressions[index + 1]);
+            fields[i / 2] = Field.field(columnExpressions[index], () -> columnExpressions[index + 1]);
         }
-        return Format.toCsv(columns).separator(delimiter).quote(quote).header(withHeader).limit(limit).build().get();
+        Schema<String, String> schema = Schema.of(fields);
+        return CsvTransformer.<String>builder().separator(delimiter).quote(quote).header(withHeader)
+            .build().generate(schema, limit + 1);
     }
 
     /**
      * Generates json based on input.
      */
-    public Json json(String... fieldExpressions) {
+    public String json(String... fieldExpressions) {
         if (fieldExpressions.length % 2 != 0) {
             throw new IllegalArgumentException("Total number of field names and field values should be even");
         }
-        Json.JsonBuilder jsonBuilder = new Json.JsonBuilder();
+
+        List<SimpleField<Object, ?>> fields = new ArrayList<>();
         for (int i = 0; i < fieldExpressions.length; i += 2) {
             final int index = i;
-            jsonBuilder.set(fieldExpressions[index], () -> fieldExpressions[index + 1]);
+            fields.add(field(fieldExpressions[index], () -> fieldExpressions[index + 1]));
         }
-        return jsonBuilder.build();
+        Schema<Object, ?> schema = Schema.of(fields.toArray(new SimpleField[0]));
+        return JSON_TRANSFORMER.generate(schema, 1);
     }
 
     /**
      * Generates json based on input.
      */
-    public Json jsona(String... fieldExpressions) {
+    public String jsona(String... fieldExpressions) {
         if (fieldExpressions.length % 3 != 0) {
             throw new IllegalArgumentException("Total number of field names and field values should be dividable by 3");
         }
-        Json.JsonBuilder jsonBuilder = new Json.JsonBuilder();
 
+        List<SimpleField<Object, ?>> fields = new ArrayList<>();
         for (int i = 0; i < fieldExpressions.length; i += 3) {
             final int index = i;
             if (fieldExpressions[i] != null && Integer.parseInt(fieldExpressions[index]) > 0) {
                 Object[] objects = new Object[Integer.parseInt(fieldExpressions[index])];
                 Arrays.fill(objects, fieldExpressions[index + 2]);
-                jsonBuilder.set(fieldExpressions[index + 1], () -> objects).build();
+                fields.add(field(fieldExpressions[index + 1], () -> objects));
             } else {
-                jsonBuilder.set(fieldExpressions[index + 1], () -> fieldExpressions[index + 2]);
+                fields.add(field(fieldExpressions[index + 1], () -> fieldExpressions[index + 2]));
             }
         }
-
-        return jsonBuilder.build();
+        Schema<Object, ?> schema = Schema.of(fields.toArray(new SimpleField[0]));
+        return JSON_TRANSFORMER.generate(schema, 1);
     }
 
     /**
@@ -499,28 +545,42 @@ public class FakeValuesService {
      * {@link BaseFaker#address()}'s {@link Address#streetName()}.
      */
     protected String resolveExpression(String expression, Object current, ProviderRegistration root, FakerContext context) {
-        if (expression.indexOf('}') == -1 || !expression.contains("#{")) {
+        int cnt = 0;
+        final int expressionLength = expression.length();
+        for (int i = 0; i < expressionLength; i++) {
+            if (expression.charAt(i) == '}') {
+                cnt++;
+            }
+        }
+        if (cnt == 0) {
             return expression;
         }
-        final List<String> expressions = splitExpressions(expression);
-        final StringBuilder result = new StringBuilder(expressions.size() * expression.length());
-        for (int i = 0; i < expressions.size(); i++) {
+        final String[] expressions = splitExpressions(expression, cnt, expressionLength);
+        final StringBuilder result = new StringBuilder(expressions.length * expressionLength);
+        for (int i = 0; i < expressions.length; i++) {
             // odd are expressions, even are not expressions, just strings
+            final String expr = expressions[i];
             if (i % 2 == 0) {
-                if (!expressions.get(i).isEmpty()) {
-                    result.append(expressions.get(i));
+                if (!expr.isEmpty()) {
+                    result.append(expr);
                 }
                 continue;
             }
-            String expr = expressions.get(i);
-            int j = 0;
-            while (j < expr.length() && !Character.isWhitespace(expr.charAt(j))) j++;
-            String directive = expr.substring(0, j);
-            while (j < expr.length() && Character.isWhitespace(expr.charAt(j))) j++;
-            final String arguments = j == expr.length() ? "" : expr.substring(j);
-            final String[] args = splitArguments(arguments);
-
-            final Object resolved = resolveExpression(directive, args, current, root, context);
+            final RegExpContext regExpContext = RegExpContext.of(expr, current, root, context);
+            final Supplier<?> val = REGEXP2SUPPLIER_MAP.get(regExpContext);
+            final Object resolved;
+            if (val != null) {
+                resolved = val.get();
+            } else {
+                int j = 0;
+                final int length = expr.length();
+                while (j < length && !Character.isWhitespace(expr.charAt(j))) j++;
+                String directive = expr.substring(0, j);
+                while (j < length && Character.isWhitespace(expr.charAt(j))) j++;
+                final String arguments = j == length ? "" : expr.substring(j);
+                final String[] args = splitArguments(arguments);
+                resolved = resExp(directive, args, current, root, context, regExpContext);
+            }
             if (resolved == null) {
                 throw new RuntimeException("Unable to resolve #{" + expr + "} directive for FakerContext " + context + ".");
             }
@@ -530,20 +590,21 @@ public class FakeValuesService {
     }
 
     private String[] splitArguments(String arguments) {
-        if (arguments == null || arguments.length() == 0) {
+        final int length;
+        if (arguments == null || (length = arguments.length()) == 0) {
             return EMPTY_ARRAY;
         }
-        String[] res = args2splittedArgs.get(arguments);
+        String[] res = ARGS_2_SPLITTED_ARGS.get(arguments);
         if (res != null) {
             return res;
         }
         List<String> result = new ArrayList<>();
         int start = 0;
         boolean argsStarted = false;
-        for (int i = 0; i < arguments.length(); i++) {
+        for (int i = 0; i < length; i++) {
             if (argsStarted) {
                 int cnt = 0;
-                while (i < arguments.length() && arguments.charAt(i) == '\'') {
+                while (i < length && arguments.charAt(i) == '\'') {
                     cnt++;
                     i++;
                 }
@@ -557,46 +618,70 @@ public class FakeValuesService {
             }
         }
         final String[] resultArray = result.toArray(EMPTY_ARRAY);
-        args2splittedArgs.put(arguments, resultArray);
+
+        ARGS_2_SPLITTED_ARGS.putIfAbsent(arguments, resultArray);
         return resultArray;
     }
 
-    private List<String> splitExpressions(String expression) {
-        List<String> result = EXPRESSION_2_SPLITTED.get(expression);
+    private String[] splitExpressions(String expression, int cnt, int length) {
+        String[] result = EXPRESSION_2_SPLITTED.get(expression);
         if (result != null) {
             return result;
         }
-        int cnt = 0;
-        for (int i = 0; i < expression.length(); i++) {
-            if (expression.charAt(i) == '}') {
-                cnt++;
-            }
-        }
-        result = new ArrayList<>(2 * cnt + 1);
+        List<String> list = new ArrayList<>(2 * cnt + 1);
         boolean isExpression = false;
         int start = 0;
         int quoteCnt = 0;
-        for (int i = 0; i < expression.length(); i++) {
+        for (int i = 0; i < length; i++) {
             if (isExpression) {
                 if (expression.charAt(i) == '}' && quoteCnt % 2 == 0) {
-                    result.add(expression.substring(start, i));
+                    list.add(expression.substring(start, i));
                     start = i + 1;
                     isExpression = false;
                 } else if (expression.charAt(i) == '\'') {
                     quoteCnt++;
                 }
-            } else if (i < expression.length() - 2 && expression.charAt(i) == '#' && expression.charAt(i + 1) == '{') {
-                result.add(expression.substring(start, i));
+            } else if (i < length - 2 && expression.charAt(i) == '#' && expression.charAt(i + 1) == '{') {
+                list.add(expression.substring(start, i));
                 isExpression = true;
                 start = i + 2;
                 i++;
             }
         }
-        if (start < expression.length()) {
-            result.add(expression.substring(start));
+        if (start < length) {
+            list.add(expression.substring(start));
         }
-        EXPRESSION_2_SPLITTED.put(expression, result);
+        result = list.toArray(EMPTY_ARRAY);
+        EXPRESSION_2_SPLITTED.putIfAbsent(expression, result);
         return result;
+    }
+
+    private Object resExp(String directive, String[] args, Object current, ProviderRegistration root, FakerContext context, RegExpContext regExpContext) {
+        Object res = resolveExpression(directive, args, current, root, context);
+        if (res instanceof CharSequence) {
+            if (((CharSequence) res).isEmpty()) {
+                REGEXP2SUPPLIER_MAP.put(regExpContext, () -> "");
+            }
+            return res;
+        }
+        if (res instanceof List) {
+            Iterator it = ((List) res).iterator();
+            while (it.hasNext()) {
+                Object supplier = it.next();
+                Object value;
+                if (supplier instanceof Supplier<?>) {
+                    value = ((Supplier<?>) supplier).get();
+                    if (value == null) {
+                        it.remove();
+                    } else {
+                        REGEXP2SUPPLIER_MAP.put(regExpContext, (Supplier<?>) supplier);
+                        return value;
+                    }
+                }
+            }
+            return null;
+        }
+        return res;
     }
 
     /**
@@ -611,53 +696,62 @@ public class FakeValuesService {
      * @return null if unable to resolve
      */
     private Object resolveExpression(String directive, String[] args, Object current, ProviderRegistration root, FakerContext context) {
-        // name.name (resolve locally)
-        // Name.first_name (resolve to faker.name().firstName())
         if (directive.isEmpty()) {
             return directive;
         }
         final int dotIndex = getDotIndex(directive);
 
-        Object resolved;
-        // resolve method references on CURRENT object like #{number_between '1','10'} on Number or
-        // #{ssn_valid} on IdNumber
-        if (dotIndex == -1) {
-            Supplier<Object> supplier = resolveFromMethodOn(current, directive, args);
-            if (supplier != null && (resolved = supplier.get()) != null) {
-                //expression2function.put(expression, supplier);
-                return resolved;
+        List<Supplier<Object>> res = new ArrayList<>();
+        if (args.length == 0) {
+            // resolve method references on CURRENT object like #{number_between '1','10'} on Number or
+            // #{ssn_valid} on IdNumber
+            if (dotIndex == -1) {
+                if (current instanceof AbstractProvider) {
+                    final Method method = BaseFaker.getMethod((AbstractProvider<?>) current, directive);
+                    if (method != null) {
+                        res.add(() -> {
+                            try {
+                                return method.invoke(current);
+                            } catch (Exception e) {
+                                throw new RuntimeException(e + " " + Arrays.toString(args));
+                            }
+                        });
+                        return res;
+                    }
+                }
+                res.add(resolveFromMethodOn(current, directive, args));
+            }
+            if (dotIndex > 0) {
+                final AbstractProvider<?> ap = BaseFaker.getProvider(directive.substring(0, dotIndex), context);
+                final Method method = BaseFaker.getMethod(ap, directive.substring(dotIndex + 1));
+                if (method != null) {
+                    res.add(() -> {
+                        try {
+                            return method.invoke(ap);
+                        } catch (Exception e) {
+                            throw new RuntimeException(e + " " + Arrays.toString(args));
+                        }
+                    });
+                    return res;
+                }
             }
         }
-
         final String simpleDirective = (dotIndex >= 0 || current == null)
             ? directive
             : classNameToYamlName(current) + "." + directive;
         // simple fetch of a value from the yaml file. the directive may have been mutated
         // such that if the current yml object is car: and directive is #{wheel} then
         // car.wheel will be looked up in the YAML file.
-        Supplier<Object> supplier = () -> safeFetch(simpleDirective, context, null);
-        resolved = supplier.get();
-        if (resolved != null) {
-            // expression2function.put(expression, supplier);
-            return resolved;
-        }
+        res.add(() -> safeFetch(simpleDirective, context, null));
 
         // resolve method references on faker object like #{regexify '[a-z]'}
         if (dotIndex == -1 && root != null && (current == null || root.getClass() != current.getClass())) {
-            supplier = resolveFromMethodOn(root, directive, args);
-            if (supplier != null && (resolved = supplier.get()) != null) {
-                //       expression2function.put(expression, supplier);
-                return resolved;
-            }
+            res.add(resolveFromMethodOn(root, directive, args));
         }
 
         // Resolve Faker Object method references like #{ClassName.method_name}
         if (dotIndex >= 0) {
-            supplier = resolveFakerObjectAndMethod(root, directive, dotIndex, args);
-            if (supplier != null && (resolved = supplier.get()) != null) {
-                // expression2function.put(expression, supplier);
-                return resolved;
-            }
+            res.add(resolveFakerObjectAndMethod(root, directive, dotIndex, args));
         }
 
         // last ditch effort.  Due to Ruby's dynamic nature, something like 'Address.street_title' will resolve
@@ -666,11 +760,11 @@ public class FakeValuesService {
         // did first but FIRST we change the Object reference Class.method_name with a yml style internal reference ->
         // class.method_name (lowercase)
         if (dotIndex >= 0) {
-            supplier = () -> safeFetch(javaNameToYamlName(simpleDirective), context, null);
-            resolved = supplier.get();
+            final String key = javaNameToYamlName(simpleDirective);
+            res.add(() -> safeFetch(key, context, null));
         }
 
-        return resolved;
+        return res;
     }
 
 
@@ -707,40 +801,43 @@ public class FakeValuesService {
      * @return a yaml style name like 'phone_number' from a java style name like 'PhoneNumber'
      */
     private String javaNameToYamlName(String expression) {
-        String result = name2yaml.get(expression);
+        String result = NAME_2_YAML.get(expression);
         if (result != null) {
             return result;
         }
-        int cnt = 0;
-        for (int i = 0; i < expression.length(); i++) {
+
+        final int length = expression.length();
+        final boolean firstLetterUpperCase = length > 0 && Character.isUpperCase(expression.charAt(0));
+        int cnt = firstLetterUpperCase ? 1 : 0;
+        for (int i = 1; i < length; i++) {
             if (Character.isUpperCase(expression.charAt(i))) {
                 cnt++;
             }
         }
         if (cnt == 0) {
-            name2yaml.put(expression, expression);
+            NAME_2_YAML.putIfAbsent(expression, expression);
             return expression;
         }
-        final StringBuilder sb = new StringBuilder(expression.length() + cnt);
-        for (int i = 0; i < expression.length(); i++) {
+        final char[] res = new char[length + (firstLetterUpperCase ? cnt - 1 : cnt)];
+        int pos = 0;
+        for (int i = 0; i < length; i++) {
+            final char c = expression.charAt(i);
             if (cnt > 0) {
-                final char c = expression.charAt(i);
                 if (Character.isUpperCase(c)) {
-                    if (sb.length() > 0) {
-                        sb.append("_");
+                    if (pos > 0) {
+                        res[pos++] = '_';
                     }
-                    sb.append(Character.toLowerCase(c));
+                    res[pos++] = Character.toLowerCase(c);
                     cnt--;
                 } else {
-                    sb.append(c);
+                    res[pos++] = c;
                 }
             } else {
-                sb.append(expression.substring(i));
-                break;
+                res[pos++] = c;
             }
         }
-        result = sb.toString();
-        name2yaml.put(expression, result);
+        result = new String(res);
+        NAME_2_YAML.putIfAbsent(expression, result);
         return result;
     }
 
@@ -790,9 +887,7 @@ public class FakeValuesService {
             String nestedMethodName = removeUnderscoreChars(classAndMethod[1]);
             final MethodAndCoercedArgs accessor = retrieveMethodAccessor(objectWithMethodToInvoke, nestedMethodName, args);
             if (accessor == null) {
-                throw new Exception("Can't find method on "
-                    + objectWithMethodToInvoke.getClass().getSimpleName()
-                    + " called " + nestedMethodName + ".");
+                return () -> null;
             }
 
             return () -> invokeAndToString(accessor, objectWithMethodToInvoke);
@@ -805,7 +900,7 @@ public class FakeValuesService {
     private MethodAndCoercedArgs retrieveMethodAccessor(Object object, String methodName, String[] args) {
         Class<?> clazz = object.getClass();
         Map<String[], MethodAndCoercedArgs> accessorMap =
-            mapOfMethodAndCoercedArgs
+            MAP_OF_METHOD_AND_COERCED_ARGS
                 .getOrDefault(clazz, Collections.emptyMap())
                 .getOrDefault(methodName, Collections.emptyMap());
         // value could be null
@@ -813,9 +908,15 @@ public class FakeValuesService {
             return accessorMap.get(args);
         }
         final MethodAndCoercedArgs accessor = accessor(clazz, methodName, args);
-        mapOfMethodAndCoercedArgs.putIfAbsent(clazz, new WeakHashMap<>());
-        mapOfMethodAndCoercedArgs.get(clazz).putIfAbsent(methodName, new WeakHashMap<>());
-        mapOfMethodAndCoercedArgs.get(clazz).get(methodName).put(args, accessor);
+        final Map<String, Map<String[], MethodAndCoercedArgs>> stringMapMap =
+            MAP_OF_METHOD_AND_COERCED_ARGS.computeIfAbsent(clazz, t -> new COWMap<>(WeakHashMap::new));
+        stringMapMap.putIfAbsent(methodName, new COWMap<>(WeakHashMap::new));
+        stringMapMap.get(methodName).putIfAbsent(args, accessor);
+        if (accessor == null) {
+            LOG.fine("Can't find method on "
+                + object.getClass().getSimpleName()
+                + " called " + methodName + ".");
+        }
         return accessor;
     }
 
@@ -837,18 +938,19 @@ public class FakeValuesService {
         LOG.log(Level.FINE, () -> "Find accessor named " + finalName + " on " + clazz.getSimpleName() + " with args " + Arrays.toString(args));
         name = removeUnderscoreChars(name);
         final Collection<Method> methods;
-        if (class2methodsCache.containsKey(clazz)) {
-            methods = class2methodsCache.get(clazz).getOrDefault(name.toLowerCase(Locale.ROOT), Collections.emptyList());
+        if (CLASS_2_METHODS_CACHE.containsKey(clazz)) {
+            methods = CLASS_2_METHODS_CACHE.get(clazz).getOrDefault(name, Collections.emptyList());
         } else {
             Method[] classMethods = clazz.getMethods();
-            Map<String, Collection<Method>> methodMap = new HashMap<>(classMethods.length);
+            Map<String, Collection<Method>> methodMap =
+                classMethods.length == 0 ? Collections.emptyMap() : new HashMap<>(classMethods.length);
             for (Method m : classMethods) {
                 final String key = m.getName().toLowerCase(Locale.ROOT);
                 methodMap.computeIfAbsent(key, k -> new ArrayList<>());
                 methodMap.get(key).add(m);
             }
-            class2methodsCache.putIfAbsent(clazz, methodMap);
-            methods = methodMap.get(name.toLowerCase(Locale.ROOT));
+            CLASS_2_METHODS_CACHE.putIfAbsent(clazz, methodMap);
+            methods = methodMap.get(name);
         }
         if (methods == null) {
             return null;
@@ -865,18 +967,19 @@ public class FakeValuesService {
     }
 
     private String removeUnderscoreChars(String string) {
-        String valueWithRemovedUnderscores = removedUnderscore.get(string);
+        String valueWithRemovedUnderscores = REMOVED_UNDERSCORE.get(string);
         if (valueWithRemovedUnderscores != null) {
             return valueWithRemovedUnderscores;
         }
         if (string.indexOf('_') == -1) {
-            removedUnderscore.put(string, string);
+            REMOVED_UNDERSCORE.putIfAbsent(string, string.toLowerCase(Locale.ROOT));
             return string;
         }
-        char[] res = string.toCharArray();
+        final char[] res = string.toCharArray();
         int offset = 0;
         int length = 0;
-        for (int i = string.length() - 1; i >= offset; i--) {
+        final int strLen = string.length();
+        for (int i = strLen - 1; i >= offset; i--) {
             while (i > offset && string.charAt(i - offset) == '_') {
                 offset++;
             }
@@ -885,8 +988,8 @@ public class FakeValuesService {
                 length++;
             }
         }
-        valueWithRemovedUnderscores = String.valueOf(res, string.length() - length, length);
-        removedUnderscore.put(string, valueWithRemovedUnderscores);
+        valueWithRemovedUnderscores = String.valueOf(res, strLen - length, length);
+        REMOVED_UNDERSCORE.putIfAbsent(string, valueWithRemovedUnderscores.toLowerCase(Locale.ROOT));
         return valueWithRemovedUnderscores;
     }
 
@@ -919,13 +1022,13 @@ public class FakeValuesService {
                     }
                 } else {
                     if (isVarArg) {
-                        Constructor<?> ctor = class2constructorCache.get(toType);
+                        Constructor<?> ctor = CLASS_2_CONSTRUCTOR_CACHE.get(toType);
                         if (ctor == null) {
                             final Constructor<?>[] constructors = toType.getConstructors();
                             for (Constructor<?> c : constructors) {
                                 if (c.getParameterCount() == 1 && c.getParameterTypes()[0] == String.class) {
                                     ctor = toType.getConstructor(String.class);
-                                    class2constructorCache.put(toType, ctor);
+                                    CLASS_2_CONSTRUCTOR_CACHE.putIfAbsent(toType, ctor);
                                     break;
                                 }
                             }
@@ -988,11 +1091,10 @@ public class FakeValuesService {
     }
 
     public static Class<?> primitiveToWrapper(final Class<?> cls) {
-        Class<?> convertedClass = cls;
         if (cls != null && cls.isPrimitive()) {
-            convertedClass = PRIMITIVE_WRAPPER_MAP.get(cls);
+            return PRIMITIVE_WRAPPER_MAP.get(cls);
         }
-        return convertedClass;
+        return cls;
     }
 
     /**

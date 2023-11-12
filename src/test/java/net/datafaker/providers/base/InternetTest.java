@@ -4,21 +4,46 @@ import org.apache.commons.validator.routines.EmailValidator;
 import org.assertj.core.api.Condition;
 import org.junit.jupiter.api.RepeatedTest;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
+import org.mockito.Spy;
 
+import java.net.URL;
 import java.net.UnknownHostException;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
 import java.util.Random;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 import static java.lang.Integer.parseInt;
-import static org.assertj.core.api.Assertions.anyOf;
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.fail;
+import static org.assertj.core.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.mockito.Mockito.doReturn;
 
 class InternetTest extends BaseFakerTest<BaseFaker> {
+
+    public static final Pattern IPV6_HOST_ADDRESS = Pattern.compile("[0-9a-fA-F]{1,4}(:([0-9a-fA-F]{1,4})){1,7}");
+    @Spy
+    private BaseFaker mockedFaker;
+
+    @RepeatedTest(100)
+    void testUsername() {
+        assertThat(faker.internet().username()).matches("^(\\w+)\\.(\\w+)$");
+    }
+
+    @RepeatedTest(10)
+    void emailSubject() {
+        assertThat(faker.internet().emailSubject()).isNotBlank();
+    }
+
+    @Test
+    void testUsernameWithSpaces() {
+        final Name name = Mockito.spy(new Name(mockedFaker));
+        doReturn("Compound Name").when(name).firstName();
+        doReturn(name).when(mockedFaker).name();
+        assertThat(mockedFaker.internet().username()).matches("^(\\w+)\\.(\\w+)$");
+    }
 
     @Test
     void testEmailAddress() {
@@ -75,8 +100,16 @@ class InternetTest extends BaseFakerTest<BaseFaker> {
     }
 
     @Test
+    void testWebdomain() {
+        assertThat(faker.internet().webdomain()).matches("www\\.[\\w-]+\\.\\w+");
+    }
+
+    @RepeatedTest(100)
     void testUrl() {
-        assertThat(faker.internet().url()).matches("www\\.(\\w|-)+\\.\\w+");
+        // This test assumes that java.net.URL has better validation than we can come up with in
+        // regex.
+        String url = faker.internet().url();
+        assertDoesNotThrow(() -> new URL(url));
     }
 
     @Test
@@ -158,8 +191,8 @@ class InternetTest extends BaseFakerTest<BaseFaker> {
             results.add(faker.internet().password(1, 10));
         }
 
-        final List<String> min = results.stream().filter(x -> x.length() == 1).collect(Collectors.toList());
-        final List<String> max = results.stream().filter(x -> x.length() == 10).collect(Collectors.toList());
+        final List<String> min = results.stream().filter(x -> x.length() == 1).toList();
+        final List<String> max = results.stream().filter(x -> x.length() == 10).toList();
 
         assertThat(min.size()).isPositive();
         assertThat(max.size()).isPositive();
@@ -292,8 +325,7 @@ class InternetTest extends BaseFakerTest<BaseFaker> {
 
         for (int i = 0; i < 1000; i++) {
             try {
-                assertThat(faker.internet().getIpV6Address().getHostAddress())
-                    .matches("[0-9a-fA-F]{1,4}(:([0-9a-fA-F]{1,4})){1,7}");
+                assertThat(faker.internet().getIpV6Address().getHostAddress()).matches(IPV6_HOST_ADDRESS);
             } catch (UnknownHostException e) {
                 fail("Failed with", e);
             }
@@ -314,7 +346,7 @@ class InternetTest extends BaseFakerTest<BaseFaker> {
 
     @RepeatedTest(10)
     void testSlugWithParams() {
-        assertThat(faker.internet().slug(Arrays.asList("a", "b"), "-")).matches("[a-zA-Z]+-[a-zA-Z]+");
+        assertThat(faker.internet().slug(List.of("a", "b"), "-")).matches("[a-zA-Z]+-[a-zA-Z]+");
     }
 
     @RepeatedTest(10)
@@ -359,7 +391,7 @@ class InternetTest extends BaseFakerTest<BaseFaker> {
         assertThat(f.internet().domainName()).isNotEmpty();
         assertThat(f.internet().emailAddress()).isNotEmpty();
         assertThat(f.internet().safeEmailAddress()).isNotEmpty();
-        assertThat(f.internet().url()).isNotEmpty();
+        assertThat(f.internet().webdomain()).isNotEmpty();
     }
 
     @Test

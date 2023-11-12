@@ -1,13 +1,21 @@
 package net.datafaker.providers.base;
 
+import net.datafaker.idnumbers.EnZAIdNumber;
+import net.datafaker.idnumbers.SvSEIdNumber;
 import org.junit.jupiter.api.RepeatedTest;
 import org.junit.jupiter.api.Test;
 
 import java.util.Locale;
+import java.util.regex.Pattern;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 class IdNumberTest extends BaseFakerTest<BaseFaker> {
+
+    public static final IdNumber SV_SE_ID_NUMBER = new BaseFaker(new Locale("sv_SE")).idNumber();
+    public static final Pattern SV_SE_ID_NUMBER_PATTERN = Pattern.compile("\\d{6}[-+]\\d{4}");
+    public static final IdNumber EN_ZA_OD_NUMBER= new BaseFaker(new Locale("en_ZA")).idNumber();
+    public static final Pattern EN_ZA_ID_NUMBER_PATTERN = Pattern.compile("[0-9]{10}([01])8[0-9]");
 
     @Test
     void testValid() {
@@ -26,26 +34,26 @@ class IdNumberTest extends BaseFakerTest<BaseFaker> {
 
     @RepeatedTest(100)
     void testValidSwedishSsn() {
-        final BaseFaker f = new BaseFaker(new Locale("sv_SE"));
-        assertThat(f.idNumber().validSvSeSsn()).matches("\\d{6}[-+]\\d{4}");
+        final String actual = SV_SE_ID_NUMBER.validSvSeSsn();
+        assertThat(actual).matches(SV_SE_ID_NUMBER_PATTERN);
+        assertThat(SvSEIdNumber.isValidSwedishSsn(actual)).isTrue();
     }
 
     @RepeatedTest(100)
     void testInvalidSwedishSsn() {
-        final BaseFaker f = new BaseFaker(new Locale("sv_SE"));
-        assertThat(f.idNumber().invalidSvSeSsn()).matches("\\d{6}[-+]\\d{4}");
+        assertThat(SV_SE_ID_NUMBER.invalidSvSeSsn()).matches(SV_SE_ID_NUMBER_PATTERN);
     }
 
     @RepeatedTest(100)
     void testValidEnZaSsn() {
-        final BaseFaker f = new BaseFaker(new Locale("en_ZA"));
-        assertThat(f.idNumber().validEnZaSsn()).matches("[0-9]{10}([01])8[0-9]");
+        String actual = EN_ZA_OD_NUMBER.validEnZaSsn();
+        assertThat(actual).matches(EN_ZA_ID_NUMBER_PATTERN);
+        assertThat(EnZAIdNumber.isValidEnZASsn(actual)).isTrue();
     }
 
     @RepeatedTest(100)
     void testInvalidEnZaSsn() {
-        final BaseFaker f = new BaseFaker(new Locale("en_ZA"));
-        assertThat(f.idNumber().inValidEnZaSsn()).matches("[0-9]{10}([01])8[0-9]");
+        assertThat(EN_ZA_OD_NUMBER.inValidEnZaSsn()).matches(EN_ZA_ID_NUMBER_PATTERN);
     }
 
     @RepeatedTest(100)

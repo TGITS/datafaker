@@ -1,34 +1,18 @@
 package net.datafaker.providers.base;
 
-import org.junit.jupiter.api.Test;
-
-import static org.assertj.core.api.Assertions.assertThat;
+import java.util.List;
+import java.util.Collection;
 
 public class DcComicsTest extends BaseFakerTest<BaseFaker> {
 
-    @Test
-    void hero() {
-        assertThat(faker.dcComics().hero()).isNotEmpty();
-    }
-
-    @Test
-    void heroine() {
-        assertThat(faker.dcComics().heroine()).isNotEmpty();
-    }
-
-    @Test
-    void villain() {
-        assertThat(faker.dcComics().villain()).isNotEmpty();
-    }
-
-    @Test
-    void name() {
-        assertThat(faker.dcComics().name()).isNotEmpty();
-    }
-
-    @Test
-    void title() {
-        assertThat(faker.dcComics().title()).isNotEmpty();
+    @Override
+protected Collection<TestSpec> providerListTest() { 
+        DcComics dcComics = faker.dcComics();
+        return List.of(TestSpec.of(dcComics::hero, "dc_comics.hero"),
+                TestSpec.of(dcComics::heroine, "dc_comics.heroine"),
+                TestSpec.of(dcComics::villain, "dc_comics.villain"),
+                TestSpec.of(dcComics::name, "dc_comics.name"),
+                TestSpec.of(dcComics::title, "dc_comics.title"));
     }
 
 }

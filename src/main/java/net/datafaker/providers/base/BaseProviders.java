@@ -1,11 +1,5 @@
 package net.datafaker.providers.base;
 
-
-import net.datafaker.providers.movie.DarkSoul;
-import net.datafaker.providers.movie.Lebowski;
-import net.datafaker.providers.movie.Simpsons;
-import net.datafaker.providers.videogame.Minecraft;
-
 /**
  * The interface to register providers for {@link BaseFaker}.
  */
@@ -65,6 +59,10 @@ public interface BaseProviders extends ProviderRegistration {
 
     default Bool bool() {
         return getProvider(Bool.class, Bool::new);
+    }
+
+    default Brand brand() {
+        return getProvider(Brand.class, Brand::new);
     }
 
     default Business business() {
@@ -143,36 +141,32 @@ public interface BaseProviders extends ProviderRegistration {
         return getProvider(CryptoCoin.class, CryptoCoin::new);
     }
 
-    default Currency currency() {
-        return getProvider(Currency.class, Currency::new);
-    }
-
     default CultureSeries cultureSeries() {
         return getProvider(CultureSeries.class, CultureSeries::new);
     }
 
-    default DarkSoul darkSoul() {
-        return getProvider(DarkSoul.class, DarkSoul::new);
+    default Currency currency() {
+        return getProvider(Currency.class, Currency::new);
     }
 
     default DateAndTime date() {
         return getProvider(DateAndTime.class, DateAndTime::new);
     }
 
-    default Disease disease() {
-        return getProvider(Disease.class, Disease::new);
+    default DcComics dcComics() {
+        return getProvider(DcComics.class, DcComics::new);
     }
 
     default Demographic demographic() {
         return getProvider(Demographic.class, Demographic::new);
     }
 
-    default DcComics dcComics() {
-        return getProvider(DcComics.class, DcComics::new);
-    }
-
     default Device device() {
         return getProvider(Device.class, Device::new);
+    }
+
+    default Disease disease() {
+        return getProvider(Disease.class, Disease::new);
     }
 
     default Dog dog() {
@@ -183,12 +177,12 @@ public interface BaseProviders extends ProviderRegistration {
         return getProvider(Domain.class, Domain::new);
     }
 
-    default Drone drone() {
-        return getProvider(Drone.class, Drone::new);
-    }
-
     default DrivingLicense drivingLicense() {
         return getProvider(DrivingLicense.class, DrivingLicense::new);
+    }
+
+    default Drone drone() {
+        return getProvider(Drone.class, Drone::new);
     }
 
     default DungeonsAndDragons dungeonsAndDragons() {
@@ -197,10 +191,6 @@ public interface BaseProviders extends ProviderRegistration {
 
     default Educator educator() {
         return getProvider(Educator.class, Educator::new);
-    }
-
-    default EldenRing eldenRing() {
-        return getProvider(EldenRing.class, EldenRing::new);
     }
 
     default ElectricalComponents electricalComponents() {
@@ -227,10 +217,6 @@ public interface BaseProviders extends ProviderRegistration {
         return getProvider(Finance.class, Finance::new);
     }
 
-    default FreshPrinceOfBelAir freshPrinceOfBelAir() {
-        return getProvider(FreshPrinceOfBelAir.class, FreshPrinceOfBelAir::new);
-    }
-
     default FunnyName funnyName() {
         return getProvider(FunnyName.class, FunnyName::new);
     }
@@ -241,10 +227,6 @@ public interface BaseProviders extends ProviderRegistration {
 
     default Gender gender() {
         return getProvider(Gender.class, Gender::new);
-    }
-
-    default GratefulDead gratefulDead() {
-        return getProvider(GratefulDead.class, GratefulDead::new);
     }
 
     default GreekPhilosopher greekPhilosopher() {
@@ -299,12 +281,12 @@ public interface BaseProviders extends ProviderRegistration {
         return getProvider(Kpop.class, Kpop::new);
     }
 
-    default Locality locality() {
-        return getProvider(Locality.class, Locality::new);
+    default LanguageCode languageCode() {
+        return getProvider(LanguageCode.class, LanguageCode::new);
     }
 
-    default Lebowski lebowski() {
-        return getProvider(Lebowski.class, Lebowski::new);
+    default Locality locality() {
+        return getProvider(Locality.class, Locality::new);
     }
 
     default Lorem lorem() {
@@ -333,10 +315,6 @@ public interface BaseProviders extends ProviderRegistration {
 
     default Military military() {
         return getProvider(Military.class, Military::new);
-    }
-
-    default Minecraft minecraft() {
-        return getProvider(Minecraft.class, Minecraft::new);
     }
 
     default Money money() {
@@ -379,17 +357,12 @@ public interface BaseProviders extends ProviderRegistration {
         return getProvider(Number.class, Number::new);
     }
 
+    default OlympicSport olympicSport() {
+        return getProvider(OlympicSport.class, OlympicSport::new);
+    }
+
     default Passport passport() {
         return getProvider(Passport.class, Passport::new);
-    }
-
-    @Deprecated
-    default Password password() {
-        return getProvider(Password.class, Password::new);
-    }
-
-    default Text text() {
-        return getProvider(Text.class, Text::new);
     }
 
     default PhoneNumber phoneNumber() {
@@ -440,10 +413,6 @@ public interface BaseProviders extends ProviderRegistration {
         return getProvider(Size.class, Size::new);
     }
 
-    default Simpsons simpsons() {
-        return getProvider(Simpsons.class, Simpsons::new);
-    }
-
     default Space space() {
         return getProvider(Space.class, Space::new);
     }
@@ -464,12 +433,20 @@ public interface BaseProviders extends ProviderRegistration {
         return getProvider(Team.class, Team::new);
     }
 
+    default Text text() {
+        return getProvider(Text.class, Text::new);
+    }
+
     default Time time() {
         return getProvider(Time.class, Time::new);
     }
 
-    default Tron tron() {
-        return getProvider(Tron.class, Tron::new);
+    default Tire tire() {
+        return getProvider(Tire.class, Tire::new);
+    }
+
+    default Transport transport() {
+        return getProvider(Transport.class, Transport::new);
     }
 
     default Twitter twitter() {
@@ -498,6 +475,10 @@ public interface BaseProviders extends ProviderRegistration {
 
     default Yoda yoda() {
         return getProvider(Yoda.class, Yoda::new);
+    }
+
+    default Zodiac zodiac() {
+        return getProvider(Zodiac.class, Zodiac::new);
     }
 
 }

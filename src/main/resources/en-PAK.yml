@@ -1,3 +1,4 @@
+#NOTE: this file is deprecated version for 'en-PK' locale. Please keep the contents identical to `en-PK.yml`.
 en-PAK:
   faker:
     name:

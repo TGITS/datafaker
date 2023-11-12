@@ -1,5 +1,15 @@
 # Articles and news
 
+**June 15, 2023**
+
+We published an article on DZone about major release of Datafaker 2.0, which you can find here: https://dzone.com/articles/datafaker-20
+
+**June 9, 2023**
+
+*Christophe Vaudry* started writing a French series about Datafaker, which you can find here: 
+
+https://medium.com/norsys-octogone/introduction-%C3%A0-datafaker-1-fournisseurs-de-donn%C3%A9es-factices-dad4cd901e97
+
 **October 20, 2022**
 
 *Eugene Kovko* wrote an excellent getting started guide for Baeldung, which you can find here:
@@ -41,7 +51,7 @@ https://www.coffeeandtips.com/post/how-to-generate-random-data-using-datafaker-l
 
 **February 11, 2022**
 
-*Piotr Minkowski* was one of the first people to twitter about Datafaker:  
+*Piotr Minkowski* was one of the first people to tweet about Datafaker:  
 
 https://twitter.com/piotr_minkowski/status/1491780736847810560/photo/1
 

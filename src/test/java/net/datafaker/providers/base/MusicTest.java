@@ -5,11 +5,15 @@ import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.util.List;
+import java.util.Collection;
+
 class MusicTest extends BaseFakerTest<BaseFaker> {
 
-    @Test
-    void instrument() {
-        assertThat(faker.music().instrument()).matches("\\w+ ?\\w+");
+    @Override
+    protected Collection<TestSpec> providerListTest() {
+        Music music = faker.music();
+        return List.of(TestSpec.of(music::instrument, "music.instruments", "\\w+ ?\\w+"));
     }
 
     @Test

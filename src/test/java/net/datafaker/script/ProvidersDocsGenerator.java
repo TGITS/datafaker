@@ -14,11 +14,13 @@ import java.io.FileWriter;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.io.Writer;
-import java.util.Arrays;
 import java.util.Comparator;
 import java.util.HashSet;
+import java.util.Locale;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.function.Function;
 import java.util.regex.Matcher;
@@ -38,10 +40,13 @@ public class ProvidersDocsGenerator {
     private final Set<Class<?>> subTypes = new TreeSet<>(providersComparatorBySimpleName);
 
     // Exclude non-providers from generation
-    private final Set<String> providersToExcludeFromGeneration = new HashSet<>(Arrays.asList("CustomFakerTest", "InsectFromFile", "Insect"));
+    private final Set<String> providersToExcludeFromGeneration = Set.of("CustomFakerTest", "InsectFromFile", "Insect");
+
+    private final Set<String> fakersWithoutSinceTag = new HashSet<>();
 
     public static void main(String[] args) {
         ProvidersDocsGenerator providersDocsGenerator = new ProvidersDocsGenerator();
+        providersDocsGenerator.initSubtypes();
         try (BufferedWriter writer = new BufferedWriter(new FileWriter(DESTINATION_PLACE_OF_PROVIDERS_FILE))) {
             providersDocsGenerator.constructHeaderInProvidersFile(writer);
             providersDocsGenerator.generateProvidersDocs(writer);
@@ -51,24 +56,28 @@ public class ProvidersDocsGenerator {
         }
     }
 
-    void generateProvidersDocs(BufferedWriter writer) throws IOException {
+    private void initSubtypes() {
         subTypes.addAll(
             reflections.get(SubTypes.of(AbstractProvider.class).asClass())
                 .stream()
                 .filter(t -> !providersToExcludeFromGeneration.contains(t.getSimpleName()))
                 .collect(Collectors.toSet()));
+    }
 
-        Set<String> fakersWithoutSinceTag = new HashSet<>();
+    void generateProvidersDocs(BufferedWriter writer) throws IOException {
         for (Class<?> clazz : subTypes) {
-            String name = clazz.getSimpleName();
-            String packageName = clazz.getPackage().getName();
-            // `packageName` should be such format: net.datafaker.providers.<groupName> (e.g. base, sport, movie)
-            // And just splitting by '.' and getting groupName (e.g. base, sport, movie)
-            String groupName = packageName.split("\\.")[3];
-            String comment = extractCommentFromJavadoc("src/main/java/net/datafaker/providers/" + groupName + "/" + name + ".java", fakersWithoutSinceTag);
-            writer.write(Column.generateRow(' ', name, comment, formatGroupName(groupName)));
+            String groupName = extractGroupName(clazz);
+            String comment = extractCommentFromJavadoc("src/main/java/net/datafaker/providers/" + groupName + "/" + clazz.getSimpleName() + ".java");
+            writer.write(Column.generateRow(' ', clazz.getSimpleName(), comment, formatGroupName(groupName)));
         }
         System.out.println("Providers without '@since' tag: " + fakersWithoutSinceTag);
+    }
+
+    private String extractGroupName(Class<?> clazz) {
+        // `packageName` should be such format: net.datafaker.providers.<groupName> (e.g. base, sport, movie)
+        String packageName = clazz.getPackage().getName();
+        // And just splitting by '.' we're getting groupName (e.g. base, sport, movie)
+        return packageName.split("\\.")[3];
     }
 
     /**
@@ -76,17 +85,16 @@ public class ProvidersDocsGenerator {
      * will always be at the very beginning of a class.
      *
      * @param filePath              Path to the Faker(provider) to be searched
-     * @param fakersWithoutSinceTag List in which add Faker's names that don't have '@since' tag
      * @return Entire first JavaDoc in the class
      */
-    private String extractCommentFromJavadoc(String filePath, Set<String> fakersWithoutSinceTag) {
+    private String extractCommentFromJavadoc(String filePath) {
         try {
             final File file = new File(filePath);
 
             Optional<CommentsCollection> commentsCollection =
                 parser.parse(file).getCommentsCollection();
 
-            if (!commentsCollection.isPresent()) {
+            if (commentsCollection.isEmpty()) {
                 fakersWithoutSinceTag.add(filePath);
                 return "";
             }
@@ -95,15 +103,15 @@ public class ProvidersDocsGenerator {
                 .stream()
                 .findFirst();
 
-            if (!javadocComments.isPresent()) {
+            if (javadocComments.isEmpty()) {
                 fakersWithoutSinceTag.add(filePath);
                 return "";
             }
 
             String comment = javadocComments.get().getContent();
-            boolean isComment = comment.contains("@since");
+            boolean containsSinceTag = comment.contains("@since");
 
-            if (!isComment) {
+            if (!containsSinceTag) {
                 fakersWithoutSinceTag.add(filePath);
             }
 
@@ -117,12 +125,58 @@ public class ProvidersDocsGenerator {
      * Writes header and table header to new 'providers.md'
      */
     private void constructHeaderInProvidersFile(Writer writer) throws IOException {
-        final String header = "# Fake Data Providers\n"
-            + "\nDatafaker comes with the following list of data providers:" + "\n\n";
+        final String header = TextBlock.HEADER.getText();
+        final String groupDescriptions = TextBlock.GROUP_DESCRIPTIONS.getText();
+        final String providersPerVersionTable = providersPerVersionTable();
+        final String totalProviders = "\nDatafaker comes with a total of " + subTypes.size() + " data providers:" + "\n\n";
 
         writer.write(header);
+        writer.write(groupDescriptions);
+        writer.write(providersPerVersionTable);
+        writer.write(totalProviders);
         writer.write(Column.generateHeaderRow(' '));
         writer.write(Column.generateEmptyRow('-'));
+    }
+
+    private String providersPerVersionTable() {
+        Map<String, Integer> providersPerVersion = extractProvidersPerVersion();
+
+        StringBuilder sb = new StringBuilder()
+            .append("\nNumber of providers per Datafaker version\n")
+            .append("\n| Version | Number of new providers | Total number of providers |")
+            .append("\n|---------|-------------------------|---------------------------|\n");
+
+        int cumulativeCountOfProvidersPerVersion = 0;
+        for (Map.Entry<String, Integer> entry : providersPerVersion.entrySet()) {
+            cumulativeCountOfProvidersPerVersion += entry.getValue();
+            sb.append("| ").append(entry.getKey()).append(" | ")
+                .append(entry.getValue().toString()).append(" | ")
+                .append(cumulativeCountOfProvidersPerVersion).append(" |\n");
+        }
+
+        return sb.toString();
+    }
+
+    /**
+     * Searching through all providers {@link subTypes}, getting since tag, and building
+     * {@link TreeMap} with count of each since tag (version).
+     * @return {@link TreeMap} with count of providers per each version
+     */
+    private Map<String, Integer> extractProvidersPerVersion() {
+        Map<String, Integer> providersPerVersion = new TreeMap<>(Comparator.naturalOrder());
+
+        for (Class<?> clazz : subTypes) {
+            String groupName = extractGroupName(clazz);
+            String comment = extractCommentFromJavadoc("src/main/java/net/datafaker/providers/" + groupName + "/" + clazz.getSimpleName() + ".java");
+            String sinceTag = Column.SINCE.getValue(comment);
+
+            if (!providersPerVersion.containsKey(sinceTag)) {
+                providersPerVersion.put(sinceTag, 0);
+            }
+            providersPerVersion.computeIfPresent(sinceTag, (key, value) -> value + 1);
+        }
+
+        return providersPerVersion;
     }
 
     private String formatGroupName(String groupName) {
@@ -170,7 +224,7 @@ public class ProvidersDocsGenerator {
 
         public static String generateRow(char padSymbol, String clazzName, String javaDocComment, String groupName) {
             StringBuilder sb = new StringBuilder();
-            sb.append("|").append(generateColumn(getName(clazzName), padSymbol, NAME.length)).append("|");
+            sb.append("|").append(generateColumn(getName(clazzName, groupName.toLowerCase(Locale.ROOT)), padSymbol, NAME.length)).append("|");
             for (int i = 1; i < values().length; i++) {
                 if (values()[i] == GROUP) {
                     sb.append(generateColumn(groupName, padSymbol, GROUP.length)).append("|");
@@ -196,8 +250,8 @@ public class ProvidersDocsGenerator {
             return "";
         }
 
-        public static String getName(String clazzName) {
-            return "[" + addSpaceBetweenNameOfProvider(clazzName) + "]({{ datafaker.javadoc }}/" + clazzName + ".html)";
+        public static String getName(String clazzName, String groupName) {
+            return "[" + addSpaceBetweenNameOfProvider(clazzName) + "](https://javadoc.io/doc/net.datafaker/datafaker/latest/net/datafaker/providers/" + groupName + "/" + clazzName + ".html)";
         }
 
         private static String addSpaceBetweenNameOfProvider(String providerName) {
@@ -217,4 +271,28 @@ public class ProvidersDocsGenerator {
             return providerBuilder.toString();
         }
     }
+
+    private enum TextBlock {
+        HEADER("# Fake Data Providers\n"),
+        GROUP_DESCRIPTIONS("""
+
+            #### Provider groups:
+            - Base (Providers of everyday data)
+            - Entertainment (Providers for movies, shows, books)
+            - Food (Providers for different types of food)
+            - Sport (Providers for different types of sport)
+            - Videogame (Video game providers)
+            """);
+
+        private final String text;
+
+        TextBlock(String text) {
+            this.text = text;
+        }
+
+        public String getText() {
+            return text;
+        }
+    }
+
 }

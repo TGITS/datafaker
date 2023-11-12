@@ -2,7 +2,7 @@
 
 Since version 1.2.0 of Datafaker it's possible create your own provider of data.
 
-A [full example](https://github.com/datafaker-net/datafaker/blob/main/src/test/java/net/datafaker/CustomFakerTest.java) can be found in the source code.
+A [full example](https://github.com/datafaker-net/datafaker/blob/main/src/test/java/net/datafaker/providers/base/CustomFakerTest.java) can be found in the source code.
 
 
 ## Custom hardcoded provider
@@ -24,7 +24,7 @@ Create a custom provider of data:
     public static class Insect extends AbstractProvider<BaseProviders> {
         private static final String[] INSECT_NAMES = new String[]{"Ant", "Beetle", "Butterfly", "Wasp"};
 
-        public Insect(Faker faker) {
+        public Insect(BaseProviders faker) {
             super(faker);
         }
 
@@ -85,7 +85,7 @@ First, create the custom provider which loads the data from a file:
     public static class InsectFromFile extends AbstractProvider<BaseProviders> {
         private static final String KEY = "insectsfromfile";
         
-        public InsectFromFile(Faker faker) {
+        public InsectFromFile(BaseProviders faker) {
             super(faker);
             faker.addPath(Locale.ENGLISH, Paths.get("src/test/ants.yml"));
             faker.addPath(Locale.ENGLISH, Paths.get("src/test/bees.yml"));

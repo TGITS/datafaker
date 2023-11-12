@@ -1,11 +1,25 @@
 package net.datafaker.providers.base;
 
-import java.util.List;
-import java.util.ArrayList;
-import java.util.Random;
-import java.util.Locale;
+import net.datafaker.annotations.Deterministic;
+
 import java.io.File;
+import java.io.IOException;
+import java.lang.management.ManagementFactory;
+import java.nio.file.FileSystem;
+import java.nio.file.FileSystems;
+import java.nio.file.FileVisitResult;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.SimpleFileVisitor;
+import java.nio.file.attribute.BasicFileAttributes;
+import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Locale;
+import java.util.Random;
+import java.util.Set;
 
 /**
  * Generates random locales in different forms.
@@ -14,7 +28,6 @@ import java.util.Collections;
  */
 public class Locality extends AbstractProvider<BaseProviders> {
 
-    private final static String resourcePath = "./src/main/resources";
     private final List<String> locales;
     private List<String> shuffledLocales = new ArrayList<>();
 
@@ -31,27 +44,67 @@ public class Locality extends AbstractProvider<BaseProviders> {
      *
      * @return a List of Strings with the name of the locale (eg. "es", "es-MX")
      */
+    @Deterministic
     public List<String> allSupportedLocales() {
+        return allSupportedLocales(Set.of("datafaker"));
+    }
 
-        // Retrieve list of all supported locale based on files in "resources" folder
-        List<String> locales = new ArrayList<>();
-
-        String[] resourceFiles = new File(resourcePath).list();
-
-        int numResourceFiles = 0;
-        if (resourceFiles != null) {
-            numResourceFiles = resourceFiles.length;
+    private boolean addLocaleIfPresent(Path file, Set<String> langs, Set<String> locales) {
+        final String filename = file.getFileName().toString().toLowerCase(Locale.ROOT);
+        if ((filename.endsWith(".yml") || filename.endsWith(".yaml")) && Files.isRegularFile(file) && Files.isReadable(file)) {
+            final String parentFileName = file.getParent().getFileName().toString();
+            if (langs.contains(parentFileName)) {
+                locales.add(parentFileName);
+            } else {
+                locales.add(filename.substring(0, filename.indexOf('.')));
+            }
+            return true;
         }
+        return false;
+    }
 
-        for (int i = 0; i < numResourceFiles; i++) {
-            String resourceFileName = resourceFiles[i];
-            if (resourceFileName.endsWith(".yml")) {
-                String localeName = resourceFileName.substring(0, resourceFileName.lastIndexOf('.'));
-                locales.add(localeName);
+    public List<String> allSupportedLocales(Set<String> fileMasks) {
+        Set<String> langs = Set.of(Locale.getISOLanguages());
+        String[] paths = ManagementFactory.getRuntimeMXBean().getClassPath().split(File.pathSeparator);
+        Set<String> locales = new HashSet<>();
+        final SimpleFileVisitor<Path> simpleFileVisitor = new SimpleFileVisitor<>() {
+
+            @Override
+            public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
+                if (file.getNameCount() > 2) {
+                    return super.visitFile(file, attrs);
+                }
+                addLocaleIfPresent(file, langs, locales);
+                return super.visitFile(file, attrs);
+            }
+        };
+
+        final SimpleFileVisitor<Path> visitor = new SimpleFileVisitor<>() {
+            @Override
+            public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
+                final String filename = file.getFileName().toString().toLowerCase(Locale.ROOT);
+                if (addLocaleIfPresent(file, langs, locales)) {
+                    // do nothing, everything is done at addLocaleIfPresent
+                } else if (filename.endsWith(".jar") && fileMasks.stream().anyMatch(filename::contains) && Files.isRegularFile(file) && Files.isReadable(file)) {
+
+                    try (FileSystem jarfs = FileSystems.newFileSystem(file, (ClassLoader) null)) {
+                        for (Path rootPath : jarfs.getRootDirectories()) {
+                            Files.walkFileTree(rootPath, simpleFileVisitor);
+                        }
+                    }
+                }
+                return super.visitFile(file, attrs);
+            }
+        };
+        for (String s: paths) {
+            try {
+                Files.walkFileTree(Paths.get(s).toAbsolutePath(), visitor);
+            } catch (Exception e) {
+                throw new RuntimeException(e);
             }
         }
 
-        return locales;
+        return new ArrayList<>(locales);
     }
 
     /**
@@ -63,12 +116,13 @@ public class Locality extends AbstractProvider<BaseProviders> {
         int randomIndex = faker.random().nextInt(locales.size());
         Locale locale = Locale.forLanguageTag(locales.get(randomIndex));
 
-        String displayLanguage = locale.getDisplayLanguage(Locale.ENGLISH);
-        String displayCountry = locale.getDisplayCountry(Locale.ENGLISH);
+        String displayLanguage = locale.getDisplayLanguage(Locale.ROOT);
+        String displayCountry = locale.getDisplayCountry(Locale.ROOT);
         if (!displayCountry.isEmpty()) {
             displayLanguage += " (" + displayCountry + ")";
         }
-        return displayLanguage;
+
+        return displayLanguage.isEmpty() ? Locale.ENGLISH.getDisplayLanguage(Locale.ROOT) : displayLanguage;
     }
 
     /**
@@ -114,8 +168,8 @@ public class Locality extends AbstractProvider<BaseProviders> {
         }
 
         // retrieve next locale in shuffledLocales and remove from list
-        String pickedLocale = shuffledLocales.get(0);
-        shuffledLocales.remove(0);
+        String pickedLocale = shuffledLocales.get(shuffledLocales.size() - 1);
+        shuffledLocales.remove(shuffledLocales.size() - 1);
 
         return pickedLocale;
     }

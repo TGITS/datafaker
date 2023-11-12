@@ -1,40 +1,19 @@
 
 package net.datafaker.providers.base;
 
-import org.junit.jupiter.api.Test;
-
-import static org.assertj.core.api.Assertions.assertThat;
+import java.util.List;
+import java.util.Collection;
 
 class KpopTest extends BaseFakerTest<BaseFaker> {
 
-    @Test
-    void iGroups() {
-        assertThat(faker.kpop().iGroups()).isNotEmpty();
+    @Override
+    protected Collection<TestSpec> providerListTest() {
+        Kpop kpop = faker.kpop();
+        return List.of(TestSpec.of(kpop::iGroups, "kpop.i_groups"),
+                TestSpec.of(kpop::iiGroups, "kpop.ii_groups"),
+                TestSpec.of(kpop::iiiGroups, "kpop.iii_groups"),
+                TestSpec.of(kpop::girlGroups, "kpop.girl_groups"),
+                TestSpec.of(kpop::boyBands, "kpop.boy_bands"),
+                TestSpec.of(kpop::solo, "kpop.solo"));
     }
-
-    @Test
-    void iiGroups() {
-        assertThat(faker.kpop().iiGroups()).isNotEmpty();
-    }
-
-    @Test
-    void iiiGroups() {
-        assertThat(faker.kpop().iiiGroups()).isNotEmpty();
-    }
-
-    @Test
-    void girlGroups() {
-        assertThat(faker.kpop().girlGroups()).isNotEmpty();
-    }
-
-    @Test
-    void boyBands() {
-        assertThat(faker.kpop().boyBands()).isNotEmpty();
-    }
-
-    @Test
-    void solo() {
-        assertThat(faker.kpop().solo()).isNotEmpty();
-    }
-
 }

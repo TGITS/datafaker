@@ -1,13 +1,13 @@
 package net.datafaker.providers.base;
 
-import org.junit.jupiter.api.Test;
-
-import static org.assertj.core.api.Assertions.assertThat;
+import java.util.List;
+import java.util.Collection;
 
 class HobbyTest extends BaseFakerTest<BaseFaker> {
 
-    @Test
-    void activity() {
-        assertThat(faker.hobby().activity()).isNotEmpty();
+    @Override
+    protected Collection<TestSpec> providerListTest() {
+        Hobby hobby = faker.hobby();
+        return List.of(TestSpec.of(hobby::activity, "hobby.activity"));
     }
 }

@@ -1,18 +1,33 @@
 package net.datafaker;
 
+import net.datafaker.annotations.Deterministic;
+import net.datafaker.providers.base.AbstractProvider;
 import net.datafaker.providers.base.BaseFaker;
 import org.junit.jupiter.api.RepeatedTest;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.reflections.Reflections;
 
-import java.util.Collections;
+import java.lang.reflect.Constructor;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.HashSet;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Random;
+import java.util.Set;
 import java.util.concurrent.Callable;
+import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.reflections.scanners.Scanners.SubTypes;
 
 class FakerTest extends AbstractFakerTest {
 
@@ -85,9 +100,9 @@ class FakerTest extends AbstractFakerTest {
     void templatify() {
         assertThat(faker.templatify("12??34", '?', "тест", "test", "测试测试")).hasSize(12);
         assertThat(faker.templatify("12??34",
-            Collections.singletonMap('1', new String[]{"тест", "test", "测试测试"}))).hasSize(9);
+            Map.of('1', new String[]{"тест", "test", "测试测试"}))).hasSize(9);
         assertThat(faker.templatify("12??34",
-            Collections.singletonMap('1', new String[]{""}))).hasSize(5);
+            Map.of('1', new String[]{""}))).hasSize(5);
     }
 
     @Test
@@ -298,6 +313,18 @@ class FakerTest extends AbstractFakerTest {
     }
 
     @Test
+    @Timeout(value = 3, unit = TimeUnit.MINUTES)
+    void issue883Test() throws InterruptedException {
+        for (int i = 0; i < 10_000_000; i++) {
+            Faker f = new Faker();
+            String s = f.ancient().god();
+            if (i % 1_000_000 == 0) {
+                Thread.sleep(10);
+            }
+        }
+    }
+
+    @Test
     void doWithLocaleExceptionTest() {
         BaseFaker localFaker = new BaseFaker();
         assertThatThrownBy(
@@ -333,5 +360,75 @@ class FakerTest extends AbstractFakerTest {
                 throw new Exception();
             }, Locale.ENGLISH, 123))
             .isInstanceOf(RuntimeException.class);
+    }
+
+    @Test
+    void shouldNotApplyCachingToMethodsWithParameters() {
+        // Test for issue: https://github.com/datafaker-net/datafaker/issues/716.
+        // No exception should be thrown
+
+        // Warm up start
+        String flight1 = faker.expression("#{Aviation.flight}");
+        assertThat(flight1).matches("[A-z0-9]{2}\\d{1,4}");
+        // Warm up end
+
+        String flight2 = faker.expression("#{Aviation.flight 'ICAO'}");
+        assertThat(flight2).matches("[A-z]{3}\\d{1,4}");
+    }
+
+    @Test
+    void testDeterministicAndNonDeterministicProvidersReturnValues() {
+        final int numberOfTestsPerMethod = 100;
+        final Reflections reflections = new Reflections("net.datafaker.providers");
+        final Set<Class<?>> classes = reflections.get(SubTypes.of(AbstractProvider.class).asClass());
+        for (var clazz : classes) {
+            final Collection<Method> methods = Arrays.stream(clazz.getDeclaredMethods())
+                .filter(m -> Modifier.isPublic(m.getModifiers()) && m.getParameterCount() == 0).collect(Collectors.toSet());
+            if (methods.isEmpty()) continue;
+            Constructor<AbstractProvider<?>> constructor = null;
+            final AbstractProvider<?> ap;
+            try {
+                final Set<Constructor<AbstractProvider<?>>> constructorsWith1Arg =
+                    Arrays.stream(clazz.getDeclaredConstructors())
+                        .filter(c -> c.getParameterCount() == 1).map(c -> (Constructor<AbstractProvider<?>>) c)
+                        .collect(Collectors.toSet());
+                for (var c : constructorsWith1Arg) {
+                    final Class<?>[] types = c.getParameterTypes();
+                    if (types[0].isAssignableFrom(Faker.class)) {
+                        constructor = c;
+                        break;
+                    }
+                }
+                assertThat(constructor).isNotNull();
+                constructor.setAccessible(true);
+                ap = constructor.newInstance(faker);
+            } catch (InvocationTargetException | InstantiationException |
+                     IllegalAccessException e) {
+                throw new RuntimeException(e);
+            }
+            for (Method m : methods) {
+                final var set = new HashSet<>();
+                try {
+                    int currentSize = 0;
+                    for (int i = 0; i < numberOfTestsPerMethod && currentSize <= 1; i++) {
+                        set.add(m.invoke(ap));
+                        currentSize = set.size();
+                    }
+                } catch (IllegalAccessException | InvocationTargetException e) {
+                    throw new RuntimeException(e);
+                }
+                if (m.isAnnotationPresent(Deterministic.class)) {
+                    assertThat(set)
+                        .as("Class: " + ap.getClass().getName()
+                            + ", method: " + m.getName() + " should have the same return value")
+                        .hasSize(1);
+                } else {
+                    assertThat(set)
+                        .as("Class: " + ap.getClass().getName()
+                            + ", method: " + m.getName() + " should generate different return values")
+                        .hasSizeGreaterThan(1);
+                }
+            }
+        }
     }
 }

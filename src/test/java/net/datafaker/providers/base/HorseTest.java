@@ -1,19 +1,15 @@
 package net.datafaker.providers.base;
 
-import org.junit.jupiter.api.Test;
-
-import static org.assertj.core.api.Assertions.assertThat;
+import java.util.List;
+import java.util.Collection;
 
 class HorseTest extends BaseFakerTest<BaseFaker> {
 
-    @Test
-    void name() {
-        assertThat(faker.horse().name()).isNotEmpty();
-    }
-
-    @Test
-    void breed() {
-        assertThat(faker.horse().breed()).isNotEmpty();
+    @Override
+    protected Collection<TestSpec> providerListTest() {
+        Horse horse = faker.horse();
+        return List.of(TestSpec.of(horse::name, "creature.horse.name"),
+                TestSpec.of(horse::breed, "creature.horse.breed"));
     }
 
 }

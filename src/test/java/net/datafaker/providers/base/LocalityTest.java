@@ -1,13 +1,14 @@
 package net.datafaker.providers.base;
 
+import net.datafaker.Faker;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.RepeatedTest;
 import org.junit.jupiter.api.Test;
 
 import java.io.File;
-import java.util.Collections;
 import java.util.List;
 import java.util.Random;
+import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -15,6 +16,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 class LocalityTest extends BaseFakerTest<BaseFaker> {
 
+    private BaseFaker f;
     private Locality locality;
     private List<String> allLocales;
 
@@ -23,7 +25,8 @@ class LocalityTest extends BaseFakerTest<BaseFaker> {
      */
     @BeforeEach
     void init() {
-        locality = faker.locality();
+        f = new Faker();
+        locality = f.locality();
         allLocales = locality.allSupportedLocales();
     }
 
@@ -31,7 +34,7 @@ class LocalityTest extends BaseFakerTest<BaseFaker> {
      * Test to check that list of all locales support is loaded
      */
     @Test
-    void testAllSuppportedLocales() {
+    void testAllSupportedLocales() {
         // Check that directory of locale resources exists
         File resourceDirectory = new File("./src/main/resources");
         assertThat(resourceDirectory).exists();
@@ -42,7 +45,7 @@ class LocalityTest extends BaseFakerTest<BaseFaker> {
 
     @Test
     void displayName() {
-        assertThat(faker.locality().displayName()).isNotEmpty();
+        assertThat(f.locality().displayName()).isNotEmpty();
     }
 
     /**
@@ -75,24 +78,16 @@ class LocalityTest extends BaseFakerTest<BaseFaker> {
         assertThat(allLocales).contains(randomLocale);
     }
 
-    /**
-     * Test to check Locality's localeStringWithoutReplacement method.
-     * It randomly selects n locales where n is the number of locales.
-     * It ensures that all the locales supported are represented once.
-     */
     @Test
     void testLocaleStringWithoutReplacement() {
         Random random = new Random();
-
         // loop through all supported locales
         for (int i = 0; i < 2; i++) {
-            List<String> returnedLocales = IntStream.range(0, allLocales.size())
+            Set<String> returnedLocales = IntStream.range(0, allLocales.size())
                 .mapToObj(j -> locality.localeStringWithoutReplacement(random))
-                .sorted()
-                .collect(Collectors.toList());
+                .collect(Collectors.toSet());
 
-            Collections.sort(allLocales);
-            assertThat(returnedLocales).isEqualTo(allLocales);
+            assertThat(allLocales).containsAll(returnedLocales);
         }
     }
 

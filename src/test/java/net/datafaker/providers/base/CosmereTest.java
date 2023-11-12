@@ -1,60 +1,25 @@
 package net.datafaker.providers.base;
 
 
-import org.junit.jupiter.api.Test;
+import java.util.List;
+import java.util.Collection;
 
-import static org.assertj.core.api.AssertionsForClassTypes.assertThat;
+class CosmereTest extends BaseFakerTest<BaseFaker> {
 
-class CosmereTest extends net.datafaker.AbstractFakerTest {
-
-    @Test
-    void aons() {
-        assertThat(faker.cosmere().aons()).isNotEmpty();
-    }
-
-    @Test
-    void shardWorlds() {
-        assertThat(faker.cosmere().shardWorlds()).isNotEmpty();
-    }
-
-    @Test
-    void shards() {
-        assertThat(faker.cosmere().shards()).isNotEmpty();
-    }
-
-    @Test
-    void surges() {
-        assertThat(faker.cosmere().surges()).isNotEmpty();
-    }
-
-    @Test
-    void knightsRadiant() {
-        assertThat(faker.cosmere().knightsRadiant()).isNotEmpty();
-    }
-
-    @Test
-    void metals() {
-        assertThat(faker.cosmere().metals()).isNotEmpty();
-    }
-
-    @Test
-    void allomancers() {
-        assertThat(faker.cosmere().allomancers()).isNotEmpty();
-    }
-
-    @Test
-    void feruchemists() {
-        assertThat(faker.cosmere().feruchemists()).isNotEmpty();
-    }
-
-    @Test
-    void heralds() {
-        assertThat(faker.cosmere().heralds()).isNotEmpty();
-    }
-
-    @Test
-    void sprens() {
-        assertThat(faker.cosmere().sprens()).isNotEmpty();
+    @Override
+    protected Collection<TestSpec> providerListTest() {
+        Cosmere cosmere = faker.cosmere();
+        return List.of(TestSpec.of(cosmere::aons, "cosmere.aons"),
+                TestSpec.of(cosmere::shardWorlds, "cosmere.shard_worlds"),
+                TestSpec.of(cosmere::shards, "cosmere.shards"),
+                TestSpec.of(cosmere::surges, "cosmere.surges"),
+                TestSpec.of(cosmere::knightsRadiant, "cosmere.knights_radiant"),
+                TestSpec.of(cosmere::metals, "cosmere.metals"),
+                TestSpec.of(cosmere::allomancers, "cosmere.allomancers"),
+                TestSpec.of(cosmere::feruchemists, "cosmere.feruchemists"),
+                TestSpec.of(cosmere::heralds, "cosmere.heralds"),
+                TestSpec.of(cosmere::sprens, "cosmere.sprens")
+                );
     }
 
 }

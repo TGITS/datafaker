@@ -3,6 +3,8 @@ package net.datafaker.providers.base;
 import org.junit.jupiter.api.RepeatedTest;
 import org.junit.jupiter.api.Test;
 
+import java.util.regex.Pattern;
+
 import static java.lang.Integer.parseInt;
 import static net.datafaker.idnumbers.pt.br.IdNumberGeneratorPtBrUtil.isCNPJValid;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -29,13 +31,14 @@ class CNPJTest extends BaseFakerTest<BaseFaker> {
 
     @Test
     void valid_multiBranchIsTrue_shouldGenerateCNPJWithBranchNumberGreaterThan0001() {
-        String cnpj = faker.cnpj().valid(true, true);
+        final CNPJ cnpj1 = faker.cnpj();
+        String cnpj = cnpj1.valid(true, true);
         String branch = cnpj.substring(11, 15);
 
         // branches are allowed to be 0001 even in multibranch mode. In this case,
         // we are giving the system 5 chances to generate something different than 0001.
         for (int i = 0; "0001".equals(branch) && i < 5; i++) {
-            cnpj = faker.cnpj().valid(true, true);
+            cnpj = cnpj1.valid(true, true);
             branch = cnpj.substring(11, 15);
         }
 
@@ -45,13 +48,14 @@ class CNPJTest extends BaseFakerTest<BaseFaker> {
 
     @RepeatedTest(1000)
     void invalid_multiBranchIsTrue_shouldGenerateCNPJWithBranchNumberGreaterThan0001() {
-        String cnpj = faker.cnpj().invalid(true, true);
+        final CNPJ cnpj1 = faker.cnpj();
+        String cnpj = cnpj1.invalid(true, true);
         String branch = cnpj.substring(11, 15);
 
         // branches are allowed to be 0001 even in multibranch mode. In this case,
         // we are giving the system 5 chances to generate something different than 0001.
         for (int i = 0; "0001".equals(branch) && i < 5 || "0000".equals(branch); i++) {
-            cnpj = faker.cnpj().invalid(true, true);
+            cnpj = cnpj1.invalid(true, true);
             branch = cnpj.substring(11, 15);
         }
 
@@ -71,12 +75,13 @@ class CNPJTest extends BaseFakerTest<BaseFaker> {
      */
     @Test
     void formattedCNPJ() {
-        final String cnpjExpression = "(^\\d{2}\\x2E\\d{3}\\x2E\\d{3}\\x2F\\d{4}\\x2D\\d{2}$)";
+        final Pattern cnpjExpression = Pattern.compile("(^\\d{2}\\x2E\\d{3}\\x2E\\d{3}\\x2F\\d{4}\\x2D\\d{2}$)");
 
-        assertThat(faker.cnpj().valid()).matches(cnpjExpression);
-        assertThat(faker.cnpj().valid(true)).matches(cnpjExpression);
-        assertThat(faker.cnpj().invalid()).matches(cnpjExpression);
-        assertThat(faker.cnpj().invalid(true)).matches(cnpjExpression);
+        final CNPJ cnpj = faker.cnpj();
+        assertThat(cnpj.valid()).matches(cnpjExpression);
+        assertThat(cnpj.valid(true)).matches(cnpjExpression);
+        assertThat(cnpj.invalid()).matches(cnpjExpression);
+        assertThat(cnpj.invalid(true)).matches(cnpjExpression);
     }
 
 }

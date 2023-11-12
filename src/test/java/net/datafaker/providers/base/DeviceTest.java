@@ -1,28 +1,17 @@
 package net.datafaker.providers.base;
 
-import org.junit.jupiter.api.Test;
-
-import static org.assertj.core.api.Assertions.assertThat;
+import java.util.List;
+import java.util.Collection;
 
 class DeviceTest extends BaseFakerTest<BaseFaker> {
 
-    @Test
-    void modelName() {
-        assertThat(faker.device().modelName()).isNotEmpty();
+    @Override
+    protected Collection<TestSpec> providerListTest() {
+        Device device = faker.device();
+        return List.of(TestSpec.of(device::modelName, "device.model_name"),
+                TestSpec.of(device::platform, "device.platform"),
+                TestSpec.of(device::manufacturer, "device.manufacturer"),
+                TestSpec.of(device::serial, "device.serial"));
     }
 
-    @Test
-    void platform() {
-        assertThat(faker.device().platform()).isNotEmpty();
-    }
-
-    @Test
-    void manufacturer() {
-        assertThat(faker.device().manufacturer()).isNotEmpty();
-    }
-
-    @Test
-    void serial() {
-        assertThat(faker.device().serial()).isNotEmpty();
-    }
 }

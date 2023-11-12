@@ -2,7 +2,9 @@ package net.datafaker.providers.base;
 
 import net.datafaker.service.RandomService;
 
-import java.text.SimpleDateFormat;
+import java.time.Instant;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.UUID;
@@ -15,8 +17,10 @@ import java.util.logging.Logger;
  * @since 0.9.0
  */
 public class Twitter extends AbstractProvider<BaseProviders> {
-
-    private final String basicstr = "QabR0cYdZ1efSg2hi3jNOPkTUM4VLlmXK5nJo6WIpHGqF7rEs8tDuC9vwBxAyz";
+    private static final Logger LOGGER = Logger.getLogger(Twitter.class.getName());
+    private static final DateTimeFormatter DATE_TIME_FORMATTER =
+        DateTimeFormatter.ofPattern("yyyyMMddHHmmss").withZone(ZoneId.systemDefault());
+    private static final String BASIC_STRING = "QabR0cYdZ1efSg2hi3jNOPkTUM4VLlmXK5nJo6WIpHGqF7rEs8tDuC9vwBxAyz";
 
     /**
      * @param faker used as constructor
@@ -35,10 +39,11 @@ public class Twitter extends AbstractProvider<BaseProviders> {
      */
     public Date createdTime(boolean forward, Date base, Date constrains) {
         final RandomService random = faker.random();
+        final long time = base.getTime();
         if (forward) {
-            return new Date(base.getTime() + (long) (random.nextDouble() * (constrains.getTime() - base.getTime())));
+            return new Date(time + (long) (random.nextDouble() * (constrains.getTime() - time)));
         } else {
-            return new Date(base.getTime() - (long) (random.nextDouble() * (base.getTime() - constrains.getTime())));
+            return new Date(time - (long) (random.nextDouble() * (time - constrains.getTime())));
         }
     }
 
@@ -51,9 +56,8 @@ public class Twitter extends AbstractProvider<BaseProviders> {
      */
     public String twitterId(int expectedLength) {
         if (expectedLength <= 6 || expectedLength >= 25) {
-            Logger logger = Logger.getLogger(Twitter.class.getName());
-            logger.setLevel(Level.WARNING);
-            logger.warning("expectedLength <= 6 may easily cause twitter id collision. And expectedLength >= 25" +
+            LOGGER.setLevel(Level.WARNING);
+            LOGGER.warning("expectedLength <= 6 may easily cause twitter id collision. And expectedLength >= 25" +
                 " can be easily out of bound.");
         }
         int hashCodeV = UUID.randomUUID().toString().hashCode();
@@ -62,24 +66,24 @@ public class Twitter extends AbstractProvider<BaseProviders> {
         }
         String id1 = String.valueOf(hashCodeV);
 
-        SimpleDateFormat sdf = new SimpleDateFormat("yyyyMMddHHmmss");
-        String newDate = sdf.format(new Date());
-        String result = "";
+        String newDate = DATE_TIME_FORMATTER.format(Instant.now());
+        int capacity = Math.max(0, expectedLength - id1.length() - newDate.length());
+        StringBuilder result = new StringBuilder(capacity);
         RandomService random = faker.random();
-        for (int i = 0; i < expectedLength - id1.length() - newDate.length(); i++) {
-            result = result.concat(String.valueOf(random.nextInt(10)));
+        for (int i = 0; i < capacity; i++) {
+            result.append(random.nextInt(10));
         }
-        String id2 = result + newDate;
+        result.append(newDate);
 
         StringBuilder sb = new StringBuilder();
         int i = 0;
         int j = 0;
-        while (i < id1.length() || j < id2.length()) {
+        while (i < id1.length() || j < result.length()) {
             if (i < id1.length()) {
                 sb.append(id1.charAt(i++));
             }
-            if (j < id2.length()) {
-                sb.append(id2.charAt(j++));
+            if (j < result.length()) {
+                sb.append(result.charAt(j++));
             }
         }
         String id = sb.toString();
@@ -98,9 +102,7 @@ public class Twitter extends AbstractProvider<BaseProviders> {
      */
     public String text(String[] keywords, int sentenceMaxLength, int wordMaxLength) {
         if (wordMaxLength <= 2) {
-            Logger logger = Logger.getLogger(Twitter.class.getName());
-            logger.setLevel(Level.WARNING);
-            logger.warning("Word length less than 2 is dangerous. Exceptions can be raised.");
+            LOGGER.warning("Word length less than 2 is dangerous. Exceptions can be raised.");
         }
         ArrayList<String> text = new ArrayList<>();
         StringBuilder sb = new StringBuilder();
@@ -110,12 +112,12 @@ public class Twitter extends AbstractProvider<BaseProviders> {
         for (int i = 0; i < sentenceLength; i++) {
             int tmpWordLength = random.nextInt(3, wordMaxLength);
             for (int j = 0; j < tmpWordLength; j++) {
-                sb.append(basicstr.charAt(random.nextInt(basicstr.length())));
+                sb.append(BASIC_STRING.charAt(random.nextInt(BASIC_STRING.length())));
             }
             text.add(sb.toString());
             sb.setLength(0);
         }
-        if (keywords != null && keywords.length > 0) {
+        if (keywords != null) {
             for (String keyword : keywords) {
                 int position = random.nextInt(text.size());
                 text.add(position, keyword);
@@ -147,17 +149,14 @@ public class Twitter extends AbstractProvider<BaseProviders> {
      */
     public String getLink(String username, int extraLength) {
         if (extraLength <= 4) {
-            Logger logger = Logger.getLogger(Twitter.class.getName());
-            logger.setLevel(Level.WARNING);
-            logger.warning("Extra length <=4 can cause collision.");
+            LOGGER.warning("Extra length <=4 can cause collision.");
         }
         RandomService random = faker.random();
-        StringBuilder sb = new StringBuilder();
-        sb.append(username).append("/");
-
-        for (int i = 0; i < extraLength; i++) {
-            sb.append(basicstr.charAt(random.nextInt(basicstr.length())));
+        final char[] res = new char[extraLength + 1];
+        res[0] = '/';
+        for (int i = 1; i < res.length; i++) {
+            res[i] = BASIC_STRING.charAt(random.nextInt(BASIC_STRING.length()));
         }
-        return "https://twitter.com/" + sb;
+        return "https://twitter.com/" + username + String.valueOf(res);
     }
 }

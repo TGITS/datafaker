@@ -5,8 +5,11 @@
 [![License](http://img.shields.io/:license-apache-brightgreen.svg)](http://www.apache.org/licenses/LICENSE-2.0.html)
 [![codecov](https://codecov.io/gh/datafaker-net/datafaker/branch/main/graph/badge.svg?token=FJ6EXMUTFD)](https://codecov.io/gh/datafaker-net/datafaker)
 
-This library is a modern fork of [java-faker](https://github.com/DiUS/java-faker), built on Java 8,
-with up to date libraries and several newly added Fake Generators.
+This library is a modern fork of [java-faker](https://github.com/DiUS/java-faker) with up to date libraries and several newly added Fake Generators. 
+
+Datafaker 2.x has Java 17 as the minimum requirement. 
+
+*If Java 17 is not an option for you, you can choose to use Datafaker 1.x. Datafaker 1.x is built on Java 8, but this version is no longer maintained. We recommend all users to upgrade to Datafaker 2.x.*
 
 This library generates fake data, similar to other fake data generators, such as:
 
@@ -26,7 +29,7 @@ In the pom.xml, add the following fragment to the `dependencies` section:
 <dependency>
     <groupId>net.datafaker</groupId>
     <artifactId>datafaker</artifactId>
-    <version>1.7.0</version>
+    <version>2.0.2</version>
 </dependency>
 ```
 
@@ -34,12 +37,12 @@ For Gradle users, add the following to your build.gradle file.
 
 ```groovy
 dependencies {
-    implementation 'net.datafaker:datafaker:1.7.0'
+    implementation 'net.datafaker:datafaker:2.0.2'
 }
 
 ```
 
-You can also use the snapshot version (`1.8.0-SNAPSHOT`), which automatically gets published
+You can also use the snapshot version (`2.0.3-SNAPSHOT`), which automatically gets published
 after every push to the main branch of this repository. Binary repository URL for snapshots download is
 https://s01.oss.sonatype.org/content/repositories/snapshots/.
 
@@ -144,7 +147,7 @@ In case of generation from scratch `Suppliers` are enough, in case of transforma
 ```java
 // transformer could be the same for both
 CsvTransformer<Name> transformer =
-        new CsvTransformer.CsvTransformerBuilder<Name>().header(true).separator(",").build();
+        CsvTransformer.<Name>builder().header(true).separator(",").build();
 // Schema for from scratch
 Schema<Name, String> fromScratch =
     Schema.of(field("firstName", () -> faker.name().firstName()),
@@ -196,7 +199,7 @@ jshell> Schema fromScratch =
 fromScratch ==> net.datafaker.transformations.Schema@306a30c7
 
 jshell> CsvTransformer<Name> transformer =
-   ...>     new CsvTransformer.CsvTransformerBuilder<Name>().header(false).separator(",").build();
+   ...>     CsvTransformer.<Name>builder().header(false).separator(",").build();
 transformer ==> net.datafaker.transformations.CsvTransformer@506c589e
 
 jshell> System.out.println(transformer.generate(fromScratch, 2));
@@ -208,15 +211,13 @@ jshell> System.out.println(transformer.generate(fromScratch, 2));
 #### JSON
 
 ```java
-Faker faker = new Faker();
-String json = Format.toJson(
-                faker.collection(faker::name)
-                  .maxLen(2)
-                  .build())
-              .set("firstName", Name::firstName)
-              .set("lastName", Name::lastName)
-              .build()
-              .generate();
+Schema<Object, ?> schema = Schema.of(
+    field("firstName", () -> faker.name().firstName()),
+    field("lastName", () -> faker.name().lastName())
+    );
+
+JsonTransformer<Object> transformer = JsonTransformer.builder().build();
+String json = transformer.generate(schema, 2);
 // [{"firstName": "Oleta", "lastName": "Toy"},
 // {"firstName": "Gerard", "lastName": "Windler"}]
 ```
@@ -246,9 +247,11 @@ Contributions
 -------------
 See [CONTRIBUTING.md](https://github.com/datafaker-net/datafaker/blob/main/CONTRIBUTING.md)
 
+If this is your first time contributing then you may find it helpful to read [FIRST_TIME_CONTRIBUTOR.md](https://github.com/datafaker-net/datafaker/blob/main/FIRST_TIME_CONTRIBUTOR.md)
+
 Providers
 -----
-[Full list of providers](https://www.datafaker.net/documentation/providers/).
+The list below is not complete and shows only a part of available providers. To view the full list of providers, please follow the link: [Full list of providers](https://www.datafaker.net/documentation/providers/).
 
 
 * Address
@@ -276,17 +279,17 @@ Providers
 * Book
 * Bool
 * Bossa Nova
+* Brand
 * Breaking Bad
 * Brooklyn Nine-Nine
 * Buffy
 * Business
-* CNPJ [Brazilian National Registry of Legal Entities](https://en.wikipedia.org/wiki/CNPJ)
-* CPF [Brazilian individual taxpayer registry identification](https://en.wikipedia.org/wiki/CPF_number)
+* CNPJ ([Brazilian National Registry of Legal Entities](https://en.wikipedia.org/wiki/CNPJ))
+* CPF ([Brazilian individual taxpayer registry identification](https://en.wikipedia.org/wiki/CPF_number))
 * Camera
 * Cat
 * Chuck Norris
 * Clash of Clans
-* Control
 * Code
 * Coin
 * Color
@@ -295,12 +298,14 @@ Providers
 * Company
 * Compass
 * Computer
+* Control
 * Country
 * Credit Card Type
 * Cricket
 * Crypto
 * Currency
 * Date and Time
+* DC Comics
 * Demographic
 * Departed
 * Dessert
@@ -308,9 +313,8 @@ Providers
 * Disease
 * Doctor Who
 * Dog
-* Doraemon
-* DC Comics
 * Domain
+* Doraemon
 * Dragon Ball
 * Driving License
 * Dumb and Dumber
@@ -334,6 +338,7 @@ Providers
 * Friends
 * Fullmetal Alchemist: Brotherhood
 * Funny Name
+* Futurama
 * Game Of Thrones
 * Garment Size
 * Gender
@@ -357,12 +362,13 @@ Providers
 * Industry Segments
 * Internet
 * Job
-* Kaamelott
 * K-pop (Korean popular music)
+* Kaamelott
+* Language Code
 * League Of Legends
 * Lebowski
-* Lord Of The Rings
 * Locality
+* Lord Of The Rings
 * Lorem
 * Marketing
 * Marvel Snap
@@ -376,11 +382,12 @@ Providers
 * Money
 * Money Heist
 * Mood
-* Mountains
 * Mountaineering
+* Mountains
 * Movie
 * Music
 * Name
+* Naruto
 * Nation
 * Nato Phonetic Alphabet
 * Nigeria
@@ -396,6 +403,7 @@ Providers
 * Pokemon
 * Princess Bride
 * Programming Language
+* Red Dead Redemption 2
 * Relationship Terms
 * Resident Evil
 * Restaurant
@@ -406,19 +414,20 @@ Providers
 * Science
 * Seinfeld
 * Shakespeare
+* Silicon Valley
+* Simpsons
 * Sip
 * Size
-* Simpsons
 * Slack Emoji
 * Soul Knight
 * Space
 * StarCraft
 * StarTrek
-* Studio Ghibli
 * Stock
+* Studio Ghibli
 * Subscription
-* Superhero
 * Super Mario
+* Superhero
 * Tea
 * Team
 * The IT Crowd
@@ -505,4 +514,4 @@ Supported Locales
 
 LICENSE
 -------
-Copyright (c) 2022 DataFaker.net See the LICENSE file for license rights and limitations.
+Copyright (c) 2023 Datafaker.net See the LICENSE file for license rights and limitations.

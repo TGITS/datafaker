@@ -1,21 +1,26 @@
 package net.datafaker.sequence;
 
 import net.datafaker.AbstractFakerTest;
-import net.datafaker.formats.Format;
 import net.datafaker.providers.base.Address;
 import net.datafaker.providers.base.BaseFaker;
 import net.datafaker.providers.base.Name;
 import net.datafaker.providers.base.Number;
+import net.datafaker.transformations.CompositeField;
+import net.datafaker.transformations.CsvTransformer;
+import net.datafaker.transformations.Field;
+import net.datafaker.transformations.JsonTransformer;
+import net.datafaker.transformations.Schema;
 import org.junit.jupiter.api.RepeatedTest;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
-import java.util.Arrays;
 import java.util.List;
 import java.util.Random;
 import java.util.function.Supplier;
 
+import static net.datafaker.transformations.Field.compositeField;
+import static net.datafaker.transformations.Field.field;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -121,7 +126,7 @@ class FakeCollectionTest extends AbstractFakerTest {
     @Test
     void generateCollectionPassingSuppliersAsList() {
         BaseFaker seededFaker = new BaseFaker(new Random(10L));
-        List<Supplier<String>> suppliers = Arrays.asList(() -> faker.name().firstName(), () -> faker.name().lastName());
+        List<Supplier<String>> suppliers = List.of(() -> faker.name().firstName(), () -> faker.name().lastName());
 
         List<String> names = faker.collection(suppliers).faker(seededFaker).len(3).generate();
         assertThat(names).hasSize(3);
@@ -165,31 +170,18 @@ class FakeCollectionTest extends AbstractFakerTest {
     }
 
     @Test
-    void differentNumberOfHeadersAndColumns() {
-        assertThatThrownBy(() -> Format.toCsv(
-                faker.<Name>collection()
-                    .suppliers(faker::name)
-                    .minLen(3)
-                    .maxLen(5)
-                    .build())
-            .headers(() -> "firstName", () -> "lastname")
-            .columns(Name::firstName, Name::lastName, Name::fullName).build().get())
-            .isInstanceOf(IllegalArgumentException.class);
-    }
-
-    @Test
     void toCsv() {
         String separator = "$$$";
         int limit = 5;
-        String csv = Format.toCsv(
-                faker.<Data>collection().minLen(limit).maxLen(limit)
-                    .suppliers(BloodPressure::new, Glucose::new, Temperature::new)
-                    .build())
-            .headers(() -> "name", () -> "value", () -> "range", () -> "unit")
-            .columns(Data::name, Data::value, Data::range, Data::unit)
-            .separator(separator)
-            .build().get();
-
+        CsvTransformer<Data> csvTransformer = CsvTransformer.<Data>builder().header(true).separator(separator).build();
+        String csv = csvTransformer.generate(
+            faker.collection(BloodPressure::new, Glucose::new, Temperature::new)
+                .len(limit).generate(),
+            Schema.of(
+                field("name", Data::name),
+                field("value", Data::value),
+                field("range", Data::range),
+                field("unit", Data::unit)));
         int numberOfLines = 0;
         int numberOfSeparator = 0;
         for (int i = 0; i < csv.length(); i++) {
@@ -199,24 +191,25 @@ class FakeCollectionTest extends AbstractFakerTest {
                 numberOfSeparator++;
             }
         }
-
-        assertThat(limit + 1).isEqualTo(numberOfLines); // limit + 1 line for header
+        assertThat(limit).isEqualTo(numberOfLines);
         assertThat((limit + 1) * (4 - 1)).isEqualTo(numberOfSeparator); // number of lines * (number of columns - 1)
     }
 
     @Test
     void toJson() {
         int limit = 10;
-        String json = Format.toJson(
-                faker.<Data>collection().minLen(limit).maxLen(limit)
-                    .suppliers(BloodPressure::new, Glucose::new, Temperature::new)
-                    .build())
-            .set("name", Data::name)
-            .set("value", Data::value)
-            .set("range", Data::range)
-            .set("unit", Data::unit)
-            .build()
-            .generate();
+
+        JsonTransformer<Data> transformer = JsonTransformer.<Data>builder().build();
+
+        String json = transformer.generate(
+            faker.<Data>collection().minLen(limit).maxLen(limit)
+                .suppliers(BloodPressure::new, Glucose::new, Temperature::new)
+                .build(), Schema.of(
+                field("name", Data::name),
+                field("value", Data::value),
+                field("range", Data::range),
+                field("unit", Data::unit)
+            ));
 
         int numberOfLines = 0;
         for (int i = 0; i < json.length(); i++) {
@@ -231,35 +224,41 @@ class FakeCollectionTest extends AbstractFakerTest {
     @Test
     void toNestedJson() {
         final int limit = 2;
-        final String json =
-            Format.toJson(faker.collection()
-                    .suppliers(faker::name)
-                    .maxLen(limit)
-                    .minLen(limit)
-                    .build())
-                .set("primaryAddress", Format.toJson()
-                    .set("country", () -> faker.address().country())
-                    .set("city", () -> faker.address().city())
-                    .set("zipcode", () -> faker.address().zipCode())
-                    .set("streetAddress", () -> faker.address().streetAddress())
-                    .build())
-                .set("secondaryAddresses", Format.toJson(faker.<Address>collection()
-                        .suppliers(faker::address)
-                        .maxLen(1)
-                        .minLen(1)
-                        .build())
-                    .set("country", Address::country)
-                    .set("city", Address::city)
-                    .set("zipcode", Address::zipCode)
-                    .set("streetAddress", Address::streetAddress)
-                    .build())
-                .set("phones", name -> faker.collection().suppliers(() -> faker.phoneNumber().phoneNumber()).maxLen(3).build().get())
-                .build()
-                .generate();
+        JsonTransformer<Name> transformer = JsonTransformer.<Name>builder().formattedAs(JsonTransformer.JsonTransformerBuilder.FormattedAs.JSON_ARRAY).build();
+
+        FakeSequence<CompositeField<Address, String>> secondaryAddresses =
+            faker.<CompositeField<Address, String>>collection()
+            .suppliers(() ->
+                compositeField(null, new Field[]{
+                    field("country", () -> faker.address().country()),
+                    field("city", () -> faker.address().city()),
+                    field("zipcode", () -> faker.address().zipCode()),
+                    field("streetAddress", () -> faker.address().streetAddress())
+                })
+            )
+            .maxLen(1)
+            .minLen(1)
+            .build();
+
+        String json = transformer.generate(
+            faker.<Name>collection().minLen(limit).maxLen(limit)
+                .suppliers(faker::name)
+                .build(),
+            Schema.of(
+                compositeField("primaryAddress", new Field[]{
+                    field("country", () -> faker.address().country()),
+                    field("city", () -> faker.address().city()),
+                    field("zipcode", () -> faker.address().zipCode()),
+                    field("streetAddress", () -> faker.address().streetAddress())
+                }),
+                field("secondaryAddresses", secondaryAddresses::get),
+                field("phones", name -> faker.collection().suppliers(() -> faker.phoneNumber().phoneNumber()).maxLen(3).build().get())
+            ));
+
 
         int numberOfLines = 0;
         for (int i = 0; i < json.length(); i++) {
-            if (json.regionMatches(i, System.lineSeparator(), 0, System.lineSeparator().length())) {
+            if (json.regionMatches(i, "}," + System.lineSeparator(), 0, ("}," + System.lineSeparator()).length())) {
                 numberOfLines++;
             }
         }

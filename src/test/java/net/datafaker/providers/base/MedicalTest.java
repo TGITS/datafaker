@@ -3,30 +3,21 @@ package net.datafaker.providers.base;
 import org.junit.jupiter.api.RepeatedTest;
 import org.junit.jupiter.api.Test;
 
+import java.util.List;
+import java.util.Collection;
 import java.util.Locale;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 class MedicalTest extends BaseFakerTest<BaseFaker> {
 
-    @Test
-    void testMedicineName() {
-        assertThat(faker.medical().medicineName()).isNotEmpty();
-    }
-
-    @Test
-    void testDiseaseName() {
-        assertThat(faker.medical().diseaseName()).isNotEmpty();
-    }
-
-    @Test
-    void testHospitalName() {
-        assertThat(faker.medical().hospitalName()).isNotEmpty();
-    }
-
-    @Test
-    void testSymptom() {
-        assertThat(faker.medical().symptoms()).isNotEmpty();
+    @Override
+    protected Collection<TestSpec> providerListTest() {
+        Medical medical = faker.medical();
+        return List.of(TestSpec.of(medical::medicineName, "medical.medicine_name"),
+                TestSpec.of(medical::diseaseName, "medical.disease_name"),
+                TestSpec.of(medical::hospitalName, "medical.hospital_name"),
+                TestSpec.of(medical::symptoms, "medical.symptoms"));
     }
 
     @Test

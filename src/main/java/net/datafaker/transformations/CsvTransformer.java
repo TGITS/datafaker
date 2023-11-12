@@ -2,10 +2,10 @@ package net.datafaker.transformations;
 
 import net.datafaker.sequence.FakeSequence;
 
-import java.util.StringJoiner;
+import java.util.Iterator;
 
 public class CsvTransformer<IN> implements Transformer<IN, CharSequence> {
-    private static final String DEFAULT_SEPARATOR = ";";
+    public static final String DEFAULT_SEPARATOR = ";";
     public static final char DEFAULT_QUOTE = '"';
 
     private final String separator;
@@ -16,6 +16,10 @@ public class CsvTransformer<IN> implements Transformer<IN, CharSequence> {
         this.separator = separator;
         this.quote = quote;
         this.withHeader = withHeader;
+    }
+
+    public static <IN> CsvTransformerBuilder<IN> builder() {
+        return new CsvTransformerBuilder<>();
     }
 
     @Override
@@ -34,20 +38,25 @@ public class CsvTransformer<IN> implements Transformer<IN, CharSequence> {
     }
 
     @Override
-    public String generate(FakeSequence<IN> input, Schema<IN, ?> schema) {
-        if (input.isInfinite()) {
+    public String generate(Iterable<IN> input, Schema<IN, ?> schema) {
+        if (input instanceof FakeSequence && ((FakeSequence) input).isInfinite()) {
             throw new IllegalArgumentException("The sequence should be finite of size");
         }
 
         StringBuilder sb = new StringBuilder();
         generateHeader(schema, sb);
 
-        StringJoiner data = new StringJoiner(LINE_SEPARATOR);
-        for (IN in : input) {
-            data.add(apply(in, schema));
+        Iterator<IN> iterator = input.iterator();
+        boolean hasNext = iterator.hasNext();
+        while (hasNext) {
+            IN in = iterator.next();
+            sb.append(apply(in, schema));
+            hasNext = iterator.hasNext();
+            if (hasNext) {
+                sb.append(LINE_SEPARATOR);
+            }
         }
 
-        sb.append(data);
         return sb.toString();
     }
 
@@ -61,13 +70,16 @@ public class CsvTransformer<IN> implements Transformer<IN, CharSequence> {
 
     private void addCharSequence(StringBuilder sb, CharSequence charSequence) {
         sb.append(quote);
-        for (int j = 0; j < charSequence.length(); j++) {
+        int i = 0;
+        final int length = charSequence.length();
+        for (int j = 0; j < length; j++) {
             final char c = charSequence.charAt(j);
             if (c == quote) {
-                sb.append(quote);
+                sb.append(charSequence, i, j + 1).append(quote);
+                i = j + 1;
             }
-            sb.append(c);
         }
+        sb.append(charSequence, i, length);
         sb.append(quote);
     }
 

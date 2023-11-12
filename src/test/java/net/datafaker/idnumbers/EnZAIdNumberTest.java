@@ -1,6 +1,7 @@
 package net.datafaker.idnumbers;
 
 import net.datafaker.providers.base.BaseFaker;
+import net.datafaker.providers.base.IdNumber;
 import org.junit.jupiter.api.RepeatedTest;
 import org.junit.jupiter.api.Test;
 
@@ -17,21 +18,21 @@ class EnZAIdNumberTest {
     void testExistSsn() {
         EnZAIdNumber idNumber = new EnZAIdNumber();
 
-        assertThat(idNumber.validSsn("9202204720085")).isFalse();
-        assertThat(idNumber.validSsn("foo2204720082")).isFalse();
-        assertThat(idNumber.validSsn("9232454720082")).isFalse();
+        assertThat(idNumber.isValidEnZASsn("9202204720085")).isFalse();
+        assertThat(idNumber.isValidEnZASsn("foo2204720082")).isFalse();
+        assertThat(idNumber.isValidEnZASsn("9232454720082")).isFalse();
 
-        assertThat(idNumber.validSsn("9202204720083")).isTrue();
-        assertThat(idNumber.validSsn("8801235111088")).isTrue();
+        assertThat(idNumber.isValidEnZASsn("9202204720083")).isTrue();
+        assertThat(idNumber.isValidEnZASsn("8801235111088")).isTrue();
     }
 
     @RepeatedTest(100)
     void testFakerSsn() {
-        EnZAIdNumber idNumber = new EnZAIdNumber();
+        EnZAIdNumber enZAIdNumber = new EnZAIdNumber();
         final BaseFaker f = new BaseFaker(new Locale("en", "ZA"));
-
-        assertThat(idNumber.validSsn(f.idNumber().valid())).isTrue();
-        assertThat(idNumber.validSsn(f.idNumber().invalid())).isFalse();
+        final IdNumber idNumber = f.idNumber();
+        assertThat(enZAIdNumber.isValidEnZASsn(idNumber.valid())).isTrue();
+        assertThat(enZAIdNumber.isValidEnZASsn(idNumber.invalid())).isFalse();
     }
 
     @RepeatedTest(100)

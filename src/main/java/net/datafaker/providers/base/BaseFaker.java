@@ -1,14 +1,19 @@
 package net.datafaker.providers.base;
 
+import net.datafaker.annotations.FakeResolver;
+import net.datafaker.sequence.FakeCollection;
 import net.datafaker.sequence.FakeSequence;
 import net.datafaker.sequence.FakeStream;
-import net.datafaker.sequence.FakeCollection;
-import net.datafaker.formats.Json;
 import net.datafaker.service.FakeValuesService;
 import net.datafaker.service.FakerContext;
 import net.datafaker.service.RandomService;
+import net.datafaker.transformations.Schema;
 
+import java.lang.reflect.Method;
+import java.net.URL;
 import java.nio.file.Path;
+import java.util.HashMap;
+import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -27,7 +32,9 @@ import java.util.function.Supplier;
 public class BaseFaker implements BaseProviders {
     private final FakerContext context;
     private final FakeValuesService fakeValuesService;
-    private static final Map<Class<? extends AbstractProvider<?>>, Map<FakerContext, AbstractProvider<?>>> PROVIDERS_MAP = new ConcurrentHashMap<>();
+    private static final Map<Class<?>, Map<FakerContext, AbstractProvider<?>>> PROVIDERS_MAP = new IdentityHashMap<>();
+    private static final Map<String, Map<FakerContext, AbstractProvider<?>>> CLASSES = new ConcurrentHashMap<>();
+    private static final Map<Class<?>, Map<String, Method>> METHODS = new IdentityHashMap<>();
 
     public BaseFaker() {
         this(Locale.ENGLISH);
@@ -53,54 +60,6 @@ public class BaseFaker implements BaseProviders {
         this.fakeValuesService = fakeValuesService;
         this.context = context;
         fakeValuesService.updateFakeValuesInterfaceMap(context.getLocaleChain());
-    }
-
-    /**
-     * Constructs Faker instance with default argument.
-     *
-     * @return {@link BaseFaker#BaseFaker()}
-     * @deprecated Use the default constructor instead
-     */
-    @Deprecated // Use the default constructor instead
-    public static BaseFaker instance() {
-        return new BaseFaker();
-    }
-
-    /**
-     * Constructs Faker instance with provided {@link Locale}.
-     *
-     * @param locale - {@link Locale}
-     * @return {@link BaseFaker#BaseFaker(Locale)}
-     * @deprecated Use the constructor with locale instead
-     */
-    @Deprecated
-    public static BaseFaker instance(Locale locale) {
-        return new BaseFaker(locale);
-    }
-
-    /**
-     * Constructs Faker instance with provided {@link Random}.
-     *
-     * @param random - {@link Random}
-     * @return {@link BaseFaker#BaseFaker(Random)}
-     * @deprecated Use the constructor with random instead
-     */
-    @Deprecated
-    public static BaseFaker instance(Random random) {
-        return new BaseFaker(random);
-    }
-
-    /**
-     * Constructs Faker instance with provided {@link Locale} and {@link Random}.
-     *
-     * @param locale - {@link Locale}
-     * @param random - {@link Random}
-     * @return {@link BaseFaker#BaseFaker(Locale, Random)}
-     * @deprecated Use the constructor with locale and random instead
-     */
-    @Deprecated
-    public static BaseFaker instance(Locale locale, Random random) {
-        return new BaseFaker(locale, random);
     }
 
     public FakerContext getContext() {
@@ -156,9 +115,11 @@ public class BaseFaker implements BaseProviders {
 
 
     /**
-     * Returns a string with the '#' characters in the parameter replaced with random digits between 0-9 inclusive.
+     * Returns a string with the '#' characters in the parameter replaced with random digits between 0-9 inclusive or
+     * random digits in the range from 1-9 when Ø (not zero) is used.
      * <p>
-     * For example, the string "ABC##EFG" could be replaced with a string like "ABC99EFG".
+     * For example, the string "ABC##EFG" could be replaced with a string like "ABC99EFG" and the
+     * string "Ø##" with a value like "149".
      *
      * @param numberString Template for string generation
      * @return Generated string
@@ -302,11 +263,11 @@ public class BaseFaker implements BaseProviders {
         return fakeValuesService().csv(separator, quote, withHeader, limit, columnExpressions);
     }
 
-    public Json json(String... fieldExpressions) {
+    public String json(String... fieldExpressions) {
         return fakeValuesService().json(fieldExpressions);
     }
 
-    public Json jsona(String... fieldExpressions) {
+    public String jsona(String... fieldExpressions) {
         return fakeValuesService().jsona(fieldExpressions);
     }
 
@@ -329,14 +290,83 @@ public class BaseFaker implements BaseProviders {
         fakeValuesService().addPath(locale, path);
     }
 
+    /**
+     * Allows to add urls of files with custom data. Data should be in YAML format.
+     *
+     * @param locale the locale for which an url is going to be added.
+     * @param url   url of a file with YAML structure
+     * @throws IllegalArgumentException in case of invalid url
+     */
+
+    public void addUrl(Locale locale, URL url) {
+        fakeValuesService().addUrl(locale, url);
+    }
+
+    public static <T> T populate(Class<T> clazz) {
+        var fakeFactory = FakeResolver.of(clazz);
+        return fakeFactory.generate(null);
+    }
+
+    public static <T> T populate(Class<T> clazz, Schema<Object, ?> schema) {
+        var fakeFactory = FakeResolver.of(clazz);
+        return fakeFactory.generate(schema);
+    }
+
     @SuppressWarnings("unchecked")
     public static <PR extends ProviderRegistration, AP extends AbstractProvider<PR>> AP getProvider(Class<AP> clazz, Function<PR, AP> valueSupplier, PR faker) {
-        PROVIDERS_MAP.putIfAbsent(clazz, new ConcurrentHashMap<>());
         Map<FakerContext, AbstractProvider<?>> map = PROVIDERS_MAP.get(clazz);
+        if (map == null) {
+            synchronized (BaseFaker.class) {
+                map = PROVIDERS_MAP.get(clazz);
+                if (map == null) {
+                    PROVIDERS_MAP.put(clazz, new ConcurrentHashMap<>());
+                    map = PROVIDERS_MAP.get(clazz);
+                }
+            }
+        }
         final AP result = (AP) map.get(faker.getContext());
         if (result == null) {
             final AP newMapping = valueSupplier.apply(faker);
+            final String simpleName = clazz.getSimpleName();
+            CLASSES.put(simpleName, new ConcurrentHashMap<>());
+
+            METHODS.putIfAbsent(newMapping.getClass(), new ConcurrentHashMap<>());
+            for (Method method: clazz.getMethods()) {
+                if (method.getParameterCount() > 0) continue;
+                StringBuilder sb = null;
+                final String methodName = method.getName();
+                final int length = methodName.length();
+                int start = 0;
+                for (int i = 0; i < length; i++) {
+                    char ch = methodName.charAt(i);
+                    if (i > 0 && Character.isUpperCase(ch)) {
+                        if (sb == null) {
+                            sb = new StringBuilder();
+                        }
+                        sb.append(methodName.toLowerCase(Locale.ROOT), start, i + 1).append('_');
+                        start = i + 1;
+                    }
+                }
+                final String name;
+                if (start > 0) {
+                    name = sb.append(methodName, start, methodName.length()).toString();
+                } else {
+                    name = methodName;
+                }
+                Map<String, Method> methodMap = METHODS.get(newMapping.getClass());
+                if (methodMap == null) {
+                    synchronized (BaseFaker.class) {
+                        methodMap = METHODS.get(newMapping.getClass());
+                        if (methodMap == null) {
+                            METHODS.put(newMapping.getClass(), new HashMap<>());
+                            methodMap = METHODS.get(newMapping.getClass());
+                        }
+                    }
+                }
+                methodMap.put(name, method);
+            }
             map.putIfAbsent(faker.getContext(), newMapping);
+            CLASSES.get(simpleName).put(faker.getContext(), newMapping);
             return newMapping;
         }
         return result;
@@ -406,5 +436,17 @@ public class BaseFaker implements BaseProviders {
     @Override
     public final <B extends ProviderRegistration> B getFaker() {
         return (B) this;
+    }
+
+    public static AbstractProvider<?> getProvider(String className, FakerContext context) {
+        final Map<FakerContext, AbstractProvider<?>> map = CLASSES.get(className);
+        if (map == null) return null;
+        return map.get(context);
+    }
+
+    public static Method getMethod(AbstractProvider<?> ap, String methodName) {
+        Map<String, Method> map;
+        if (ap == null || (map = METHODS.get(ap.getClass())) == null) return null;
+        return map.get(methodName);
     }
 }

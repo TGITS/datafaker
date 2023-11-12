@@ -1,18 +1,14 @@
 package net.datafaker.providers.base;
 
-import org.junit.jupiter.api.Test;
-
-import static org.assertj.core.api.Assertions.assertThat;
+import java.util.List;
+import java.util.Collection;
 
 public class CommunityTest extends BaseFakerTest<BaseFaker> {
 
-    @Test
-    void testCharacter() {
-        assertThat(faker.community().character()).isNotEmpty();
-    }
-
-    @Test
-    void testQuote() {
-        assertThat(faker.community().quote()).isNotEmpty();
+    @Override
+    protected Collection<TestSpec> providerListTest() {
+        Community community = faker.community();
+        return List.of(TestSpec.of(community::character, "community.characters"),
+                TestSpec.of(community::quote, "community.quotes"));
     }
 }

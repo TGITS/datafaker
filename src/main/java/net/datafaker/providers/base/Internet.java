@@ -1,6 +1,6 @@
 package net.datafaker.providers.base;
 
-import net.datafaker.service.FakerIDN;
+import net.datafaker.internal.helper.FakerIDN;
 import net.datafaker.service.RandomService;
 
 import java.net.Inet4Address;
@@ -19,13 +19,41 @@ import java.util.regex.Pattern;
 public class Internet extends AbstractProvider<BaseProviders> {
     private static final Pattern SINGLE_QUOTE = Pattern.compile("'");
     private static final Pattern COLON = Pattern.compile(":");
+    private static final List<String> HTTP_SCHEMES = List.of("http://", "https://");
 
     protected Internet(BaseProviders faker) {
         super(faker);
     }
 
+
+    /**
+     * A lowercase username composed of the first_name and last_name joined with a '.'. Some examples are:
+     * <ul>
+     *     <li>(template) {@link Name#firstName()}.{@link Name#lastName()}</li>
+     *     <li>jim.jones</li>
+     *     <li>jason.leigh</li>
+     *     <li>tracy.jordan</li>
+     * </ul>
+     *
+     * @return a random two part username.
+     * @see Name#firstName()
+     * @see Name#lastName()
+     */
+    public String username() {
+        StringBuilder result = new StringBuilder();
+        final String firstName = faker.name().firstName().toLowerCase(faker.getContext().getLocale()) + "." + faker.name().lastName().toLowerCase(faker.getContext().getLocale());
+        for (int i = 0; i < firstName.length(); i++) {
+            final char c = firstName.charAt(i);
+            if (c == '\'' || Character.isWhitespace(c)) {
+                continue;
+            }
+            result.append(c);
+        }
+        return result.toString();
+    }
+
     public String emailAddress() {
-        return emailAddress(faker.name().username());
+        return emailAddress(faker.internet().username());
     }
 
     public String emailAddress(String localPart) {
@@ -33,7 +61,7 @@ public class Internet extends AbstractProvider<BaseProviders> {
     }
 
     public String safeEmailAddress() {
-        return safeEmailAddress(faker.name().username());
+        return safeEmailAddress(faker.internet().username());
     }
 
     public String safeEmailAddress(String localPart) {
@@ -42,6 +70,10 @@ public class Internet extends AbstractProvider<BaseProviders> {
 
     private String emailAddress(String localPart, String domain) {
         return String.join("", stripAccents(localPart), "@", domain);
+    }
+
+    public String emailSubject() {
+        return resolve("internet.email_subject");
     }
 
     public static final Pattern DIACRITICS_AND_FRIENDS
@@ -66,7 +98,49 @@ public class Internet extends AbstractProvider<BaseProviders> {
         return resolve("internet.domain_suffix");
     }
 
+    /**
+     * Returns a string representing a web URL, randomly including: http/https scheme, port, path
+     * elements (2 or none), file element (1 or none), params (2 or none), anchor (1 or none).
+     * 
+     * @return a web URL
+     * @since 2.0.0
+     */
     public String url() {
+       final byte[] bts = faker.random().nextRandomBytes(6);
+        return url(bts[0] % 2 == 0, bts[1] % 2 == 0,
+                bts[2] % 2 == 0, bts[3] % 2 == 0,
+                bts[4] % 2 == 0, bts[5] % 2 == 0);
+    }
+
+    /**
+     * Returns a string representing a web URL, with various elements controlled by the caller.
+     * 
+     * @param schemeChoice if true will be random http or https, if false will be https
+     * @param portChoice if true a random port will be included, if false no port will be included
+     * @param pathChoice if true two random path elements will be included, if false no path elements will be included
+     * @param fileChoice if true the path will end with a random word element instead of a slash, if false it will end with a slash
+     * @param paramsChoice if true two random name value pairs will be included, if false no params will be included
+     * @param anchorChoice if true a random anchor will be included, if false no anchor will be included
+     * @return a web URL
+     * @since 2.0.0
+     */
+    public String url(boolean schemeChoice, boolean portChoice, boolean pathChoice, boolean fileChoice, boolean paramsChoice, boolean anchorChoice) {
+        String scheme = schemeChoice ? HTTP_SCHEMES.get(faker.random().nextInt(0, 1)) : "https://";
+        String port = portChoice ? (":" + port()) : "";
+        String path = pathChoice ? ("/" + slug(faker.lorem().words(2), "/")) : "/";
+        String file = fileChoice ? faker.lorem().words(1).get(0) : "";
+        String params = paramsChoice ? ("?" + slug(faker.lorem().words(2), "=") + "&" + slug(faker.lorem().words(2), "=")) : "";
+        String anchor = anchorChoice ? ("#" + faker.lorem().words(1).get(0)) : "";
+        return scheme + webdomain() + port + path + file + params + anchor;
+    }
+
+    /**
+     * Returns a web domain.
+     * 
+     * @return a web domain in the form "www.example.com"
+     * @since 2.0.0
+     */
+    public String webdomain() {
         return String.join("",
             "www",
             ".",
@@ -90,11 +164,11 @@ public class Internet extends AbstractProvider<BaseProviders> {
     }
 
     public String image(int width, int height) {
-        return String.format("https://picsum.photos/%s/%s", width, height);
+        return "https://picsum.photos/%s/%s".formatted(width, height);
     }
 
     public String image(int width, int height, String seed) {
-        return String.format("https://picsum.photos/seed/%s/%s/%s", seed, width, height);
+        return "https://picsum.photos/seed/%s/%s/%s".formatted(seed, width, height);
     }
 
     public String httpMethod() {
@@ -142,13 +216,13 @@ public class Internet extends AbstractProvider<BaseProviders> {
      */
     public String macAddress(String prefix) {
         final String tmp = (prefix == null) ? "" : prefix;
-        final int prefixLength = tmp.trim().length() == 0
+        final int prefixLength = tmp.trim().isEmpty()
             ? 0
             : COLON.split(tmp).length;
 
         final StringBuilder out = new StringBuilder(tmp);
         for (int i = 0; i < 6 - prefixLength; i++) {
-            if (out.length() > 0) {
+            if (!out.isEmpty()) {
                 out.append(':');
             }
             out.append(Integer.toHexString(faker.random().nextInt(16)));
@@ -215,15 +289,9 @@ public class Internet extends AbstractProvider<BaseProviders> {
             fourth = (byte) r.nextInt(256);
 
         switch (first) {
-            case (byte) 172:
-                second = random(PRIVATE_SECOND_OCTET_172);
-                break;
-            case (byte) 192:
-                second = (byte) 168;
-                break;
-            case (byte) 169:
-                second = (byte) 254;
-                break;
+            case (byte) 172 -> second = random(PRIVATE_SECOND_OCTET_172);
+            case (byte) 192 -> second = (byte) 168;
+            case (byte) 169 -> second = (byte) 254;
         }
         return Inet4Address.getByAddress(new byte[]{first, second, third, fourth});
     }
@@ -286,17 +354,17 @@ public class Internet extends AbstractProvider<BaseProviders> {
      * @return a IPV6 address.
      */
     public InetAddress getIpV6Address() throws UnknownHostException {
-        final StringBuilder tmp = new StringBuilder(2 * 8 + 7);
+        final RandomService random = faker.random();
+        final char[] res = new char[4 * 8 + 7];
         for (int i = 0; i < 8; i++) {
+            int offset = 4 * i;
             if (i > 0) {
-                tmp.append(":");
+                res[i - 1 + offset] = ':';
             }
-            tmp.append(Integer.toHexString(faker.random().nextInt(16)));
-            tmp.append(Integer.toHexString(faker.random().nextInt(16)));
-            tmp.append(Integer.toHexString(faker.random().nextInt(16)));
-            tmp.append(Integer.toHexString(faker.random().nextInt(16)));
+            char[] hex = random.hex(4, false).toCharArray();
+            System.arraycopy(hex, 0, res, i + offset, hex.length);
         }
-        return Inet6Address.getByName(tmp.toString());
+        return Inet6Address.getByName(String.valueOf(res));
     }
 
     /**

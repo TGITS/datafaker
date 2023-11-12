@@ -15,7 +15,7 @@ public class FakeValuesGrouping implements FakeValuesInterface {
 
     static {
         for (EnFile file : EnFile.getFiles()) {
-            ENGLISH_FAKE_VALUE_GROUPING.add(new FakeValues(Locale.ENGLISH, file.getFile(), file.getPath()));
+            ENGLISH_FAKE_VALUE_GROUPING.add(FakeValues.of(FakeValuesContext.of(Locale.ENGLISH, file.getFile(), file.getPath())));
         }
     }
 
@@ -35,11 +35,11 @@ public class FakeValuesGrouping implements FakeValuesInterface {
     public Map get(String key) {
         Map result = null;
         for (FakeValuesInterface fakeValues : fakeValues.getOrDefault(key, Collections.emptyList())) {
-            if (result != null) {
+            if (result == null) {
+                result = fakeValues.get(key);
+            } else {
                 final Map newResult = fakeValues.get(key);
                 result.putAll(newResult);
-            } else {
-                result = fakeValues.get(key);
             }
         }
         return result;

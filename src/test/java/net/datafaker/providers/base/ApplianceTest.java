@@ -1,18 +1,14 @@
 package net.datafaker.providers.base;
 
-import org.junit.jupiter.api.Test;
-
-import static org.assertj.core.api.Assertions.assertThat;
+import java.util.List;
+import java.util.Collection;
 
 class ApplianceTest extends BaseFakerTest<BaseFaker> {
 
-    @Test
-    void brand() {
-        assertThat(faker.appliance().brand()).matches("[A-Za-z .-]+");
-    }
-
-    @Test
-    void equipment() {
-        assertThat(faker.appliance().equipment()).isNotEmpty();
+    @Override
+    protected Collection<TestSpec> providerListTest() {
+        Appliance appliance = faker.appliance();
+        return List.of(TestSpec.of(appliance::brand, "appliance.brand", "[A-Za-z .-]+"),
+                TestSpec.of(appliance::equipment, "appliance.equipment"));
     }
 }

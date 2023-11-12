@@ -71,12 +71,12 @@ public class Disease extends AbstractProvider<BaseProviders> {
     }
 
     /**
-     * Generate random dermatolory disease
+     * Generate random dermatology disease
      *
-     * @return A dermatolory disease
+     * @return A dermatology disease
+     * @since 1.8.0
      */
-    public String dermatolory() {
-        return resolve("disease.dermatolory");
+    public String dermatology() {
+        return resolve("disease.dermatology");
     }
-
 }

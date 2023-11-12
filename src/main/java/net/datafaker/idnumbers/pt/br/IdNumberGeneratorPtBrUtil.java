@@ -23,15 +23,17 @@ public final class IdNumberGeneratorPtBrUtil {
             }
 
             if (multiBranch) {
-                partial.append(leftPad('0', 4, String.valueOf(faker.random().nextInt(1, 9999))));
+                String string = String.valueOf(faker.random().nextInt(1, 9999));
+                partial.append(String.valueOf('0').repeat(Math.max(0, 4 - string.length())));
+                partial.append(string);
             } else {
                 partial.append("0001");
             }
 
             cnpj = partial.toString();
 
-            int d1 = digit(calculateWeight(cnpj.substring(4, 12), 9) + calculateWeight(cnpj.substring(0, 4), 5));
-            int d2 = digit((d1 * 2) + calculateWeight(cnpj.substring(5, 12), 9) + calculateWeight(cnpj.substring(0, 5), 6));
+            int d1 = digit(calculateWeight(cnpj, 9, 4, 12) + calculateWeight(cnpj, 5, 0, 4));
+            int d2 = digit((d1 * 2) + calculateWeight(cnpj, 9, 5, 12) + calculateWeight(cnpj, 6, 0, 5));
 
             cnpj = (cnpj + d1) + d2;
         } else {
@@ -58,14 +60,14 @@ public final class IdNumberGeneratorPtBrUtil {
     public static String cpf(BaseProviders faker, boolean formatted, boolean valid) {
         String cpf;
         if (valid) {
-            StringBuilder partial = new StringBuilder();
+            char[] partial = new char[9];
             for (int i = 0; i < 9; i++) {
-                partial.append(faker.random().nextInt(9));
+                partial[i] = (char)('0' + faker.random().nextInt(9));
             }
-            cpf = partial.toString();
+            cpf = String.valueOf(partial);
 
-            int d1 = digit(calculateWeight(cpf, 10));
-            int d2 = digit((d1 * 2) + calculateWeight(cpf, 11));
+            int d1 = digit(calculateWeight(cpf, 10, 0, cpf.length()));
+            int d2 = digit((d1 * 2) + calculateWeight(cpf, 11, 0, cpf.length()));
 
             cpf = (cpf + d1) + d2;
         } else {
@@ -85,28 +87,31 @@ public final class IdNumberGeneratorPtBrUtil {
 
     /**
      * Return true if the CNPJ is valid
-     * A valid CNPJ is unique and have a algorithm to validate it
+     * A valid CNPJ is unique and have an algorithm to validate it
      * <p>
-     * CNPJ generator could generate a valid or invalid because, somentimes, we need to test a
+     * CNPJ generator could generate a valid or invalid because, sometimes, we need to test a
      * registration with invalid number
      */
-    public static Boolean isCNPJValid(final String cnpj) {
+    public static boolean isCNPJValid(final String cnpj) {
         String cnpjUnmask = DocumentFormatterUtil.unmask(cnpj);
-        String cnpjPartial = cnpjUnmask.substring(0, 12);
+        final int cnpjPartialLength = 12;
+        if (!cnpjUnmask.regionMatches(0, cnpjUnmask, 0, cnpjPartialLength)) {
+            return false;
+        }
 
-        int d1 = digit(calculateWeight(cnpjPartial.substring(4, 12), 9) + calculateWeight(cnpjPartial.substring(0, 4), 5));
-        int d2 = digit((d1 * 2) + calculateWeight(cnpjPartial.substring(5, 12), 9) + calculateWeight(cnpjPartial.substring(0, 5), 6));
+        int d1 = digit(calculateWeight(cnpjUnmask, 9, 4, cnpjPartialLength) + calculateWeight(cnpjUnmask, 5, 0, 4));
+        int d2 = digit((d1 * 2) + calculateWeight(cnpjUnmask, 9, 5, cnpjPartialLength) + calculateWeight(cnpjUnmask, 6, 0, 5));
 
-        String anObject = (cnpjPartial + d1) + d2;
 
-        return cnpjUnmask.equals(anObject);
+        final String other = d1 + "" + d2;
+        return cnpjUnmask.regionMatches(cnpjPartialLength, other, 0, other.length());
     }
 
     /**
      * Return true if the CPF is valid
      * A valid CPF is unique and have a algorithm to validate it
      * <p>
-     * CPF generator could generate a valid or invalid because, somentimes, we need to test a
+     * CPF generator could generate a valid or invalid because, sometimes, we need to test a
      * registration with invalid number
      */
     public static Boolean isCPFValid(final String cpf) {
@@ -114,36 +119,29 @@ public final class IdNumberGeneratorPtBrUtil {
 
         String cpfPartial = cpfUnmask.substring(0, 9);
 
-        int d1 = digit(calculateWeight(cpfPartial, 10));
-        int d2 = digit((d1 * 2) + calculateWeight(cpfPartial, 11));
+        int d1 = digit(calculateWeight(cpfUnmask, 10, 0, 9));
+        int d2 = digit((d1 * 2) + calculateWeight(cpfUnmask, 11, 0, 9));
 
         return cpfUnmask.equals((cpfPartial + d1) + d2);
     }
 
 
-    public static int calculateWeight(final String num, final int weight) {
+    public static int calculateWeight(final String num, final int weight, int start, int end) {
         int sum = 0;
         int weightAux = weight;
 
-        for (int index = 0; index < num.length(); index++) {
-            sum += Integer.parseInt(num.substring(index, index + 1)) * weightAux--;
+        for (int index = start; index < end; index++) {
+            sum += (num.charAt(index) - '0') * weightAux--;
         }
         return sum;
     }
 
     public static int digit(int verifyingDigit) {
-        if (verifyingDigit % 11 == 0 || verifyingDigit % 11 == 1)
+        int remainder = verifyingDigit % 11;
+        if (remainder == 0 || remainder == 1)
             return 0;
         else
-            return 11 - verifyingDigit % 11;
-    }
-
-    private static String leftPad(char pad, int length, String string) {
-        StringBuilder appender = new StringBuilder();
-        for (int i = 0; i < length - string.length(); i++) {
-            appender.append(pad);
-        }
-        return appender.append(string).toString();
+            return 11 - remainder;
     }
 
 }
